@@ -8,13 +8,13 @@
 CLI и составные действия GitHub Actions для публикации Android App Bundle
 в RuStore.
 
-Статус: выпуск [0.0.1](https://github.com/vyachin/rustore-publisher/releases/latest).
+Статус: выпуск [0.0.2](https://github.com/vyachin/rustore-publisher/releases/latest).
 Все пять команд, архивы выпуска и GitHub Actions реализованы; чтения и отправка
 на модерацию проверены на живом приложении. Публикация после одобрения
 модерации ещё не подтверждена. План и чек-лист —
 [TODO.md](TODO.md), полный контракт — [docs/design.md](docs/design.md).
 
-## Возможности 0.0.1
+## Возможности 0.0.2
 
 - `publish -f app.aab` — локальная проверка AAB и списка изменений, проверка
   состояния приложения, создание черновика с ручной публикацией, потоковая
@@ -71,8 +71,10 @@ rustore-publisher status -p com.example.app
 
 Список изменений — `metadata/ru-RU/changelogs/<versionCode>.txt` в UTF-8,
 до 5000 символов. Без `--metadata-dir` поле `whatsNew` не передаётся, а CLI
-предупреждает, что пользователи увидят прежние заметки активной версии. Другие
-локали и файлы карточки в 0.0.1 отклоняются.
+предупреждает, что пользователи увидят прежние заметки активной версии. Файлы
+карточки другого магазина (`title.txt`, описания, `images/`) не публикуются:
+CLI перечисляет их в предупреждении `METADATA_IGNORED`, поэтому один каталог
+можно передавать обоим инструментам.
 
 Контакты разработчика можно передать файлом `metadata/developer-contacts.json`
 или явно через `--contacts-file`. Полный формат, правила проверки и примеры —
@@ -112,8 +114,8 @@ rustore-publisher status -p com.example.app
 
 ## GitHub Actions
 
-- `vyachin/rustore-publisher@v0.0.1` — установка CLI и публикация AAB.
-- `vyachin/rustore-publisher/setup@v0.0.1` — только установка CLI.
+- `vyachin/rustore-publisher@v0.0.2` — установка CLI и публикация AAB.
+- `vyachin/rustore-publisher/setup@v0.0.2` — только установка CLI.
 
 Входы, выходы, секреты и восстановление описаны в
 [docs/actions.md](docs/actions.md). Архивы выпуска собираются GoReleaser

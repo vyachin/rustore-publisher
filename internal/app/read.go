@@ -18,6 +18,7 @@ const (
 // Коды предупреждений CLI.
 const (
 	WarningStatusUnavailable = "STATUS_UNAVAILABLE"
+	WarningMetadataIgnored   = "METADATA_IGNORED"
 )
 
 // Warning — предупреждение, не отменяющее успешное чтение.

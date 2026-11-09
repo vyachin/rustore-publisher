@@ -3,6 +3,7 @@ package app_test
 import (
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -33,12 +34,15 @@ func TestReadChangelog(t *testing.T) {
 		"ru-RU/changelogs/42.txt": "Исправлены ошибки.\nУскорен запуск.\n",
 	})
 
-	text, err := app.ReadChangelog(root, 42)
+	report, err := app.ReadChangelog(root, 42)
 	if err != nil {
 		t.Fatalf("ReadChangelog: %v", err)
 	}
-	if text != "Исправлены ошибки.\nУскорен запуск.\n" {
-		t.Errorf("text = %q", text)
+	if report.Text != "Исправлены ошибки.\nУскорен запуск.\n" {
+		t.Errorf("text = %q", report.Text)
+	}
+	if len(report.Ignored) != 0 {
+		t.Errorf("ignored = %v, want пусто", report.Ignored)
 	}
 }
 
@@ -49,12 +53,12 @@ func TestReadChangelogNormalizesNewlines(t *testing.T) {
 		"ru-RU/changelogs/7.txt": "Первая строка\r\nВторая строка\rТретья",
 	})
 
-	text, err := app.ReadChangelog(root, 7)
+	report, err := app.ReadChangelog(root, 7)
 	if err != nil {
 		t.Fatalf("ReadChangelog: %v", err)
 	}
-	if text != "Первая строка\nВторая строка\nТретья" {
-		t.Errorf("text = %q", text)
+	if report.Text != "Первая строка\nВторая строка\nТретья" {
+		t.Errorf("text = %q", report.Text)
 	}
 }
 
@@ -68,8 +72,48 @@ func TestReadChangelogIgnoresDotFiles(t *testing.T) {
 		"ru-RU/changelogs/42.txt": "Изменения",
 	})
 
-	if _, err := app.ReadChangelog(root, 42); err != nil {
+	report, err := app.ReadChangelog(root, 42)
+	if err != nil {
 		t.Fatalf("ReadChangelog: %v", err)
+	}
+	if len(report.Ignored) != 0 {
+		t.Errorf("ignored = %v, want пусто", report.Ignored)
+	}
+}
+
+func TestReadChangelogAcceptsPlayListing(t *testing.T) {
+	t.Parallel()
+
+	root := writeMetadata(t, map[string]string{
+		"README.md":                   "Как устроены метаданные",
+		"developer-contacts.json":     `{"email":"dev@example.com"}`,
+		"ru-RU/title.txt":             "Приложение",
+		"ru-RU/short_description.txt": "Короткое описание",
+		"ru-RU/full_description.txt":  "Полное описание",
+		"ru-RU/images/icon.png":       "картинка",
+		"ru-RU/changelogs/42.txt":     "Изменения версии 42",
+		"ru-RU/changelogs/41.txt":     "Изменения версии 41",
+		"ru-RU/changelogs/.DS_Store":  "служебный",
+		"ru-RU/changelogs/.gitkeep":   "",
+		".circleci/config.yml":        "служебный",
+	})
+
+	report, err := app.ReadChangelog(root, 42)
+	if err != nil {
+		t.Fatalf("ReadChangelog: %v", err)
+	}
+	if report.Text != "Изменения версии 42" {
+		t.Errorf("text = %q", report.Text)
+	}
+	want := []string{
+		"README.md",
+		"ru-RU/full_description.txt",
+		"ru-RU/images",
+		"ru-RU/short_description.txt",
+		"ru-RU/title.txt",
+	}
+	if !slices.Equal(report.Ignored, want) {
+		t.Errorf("ignored = %v, want %v", report.Ignored, want)
 	}
 }
 
@@ -79,12 +123,12 @@ func TestReadChangelogAcceptsFiveThousandRunes(t *testing.T) {
 	text := strings.Repeat("я", 5000)
 	root := writeMetadata(t, map[string]string{"ru-RU/changelogs/42.txt": text})
 
-	got, err := app.ReadChangelog(root, 42)
+	report, err := app.ReadChangelog(root, 42)
 	if err != nil {
 		t.Fatalf("ReadChangelog: %v", err)
 	}
-	if len([]rune(got)) != 5000 {
-		t.Errorf("длина = %d", len([]rune(got)))
+	if len([]rune(report.Text)) != 5000 {
+		t.Errorf("длина = %d", len([]rune(report.Text)))
 	}
 }
 
@@ -120,17 +164,10 @@ func TestReadChangelogErrors(t *testing.T) {
 			kind:     exitcode.KindInvalidChangelog,
 		},
 		{
-			name:     "другая локаль",
+			name:     "нет локали ru-RU",
 			metadata: map[string]string{"en-US/changelogs/42.txt": "changes"},
 			code:     42,
-			want:     "en-US",
-			kind:     exitcode.KindInvalidChangelog,
-		},
-		{
-			name:     "файлы карточки",
-			metadata: map[string]string{"ru-RU/listings/42.txt": "карточка"},
-			code:     42,
-			want:     "listings",
+			want:     "ru-RU",
 			kind:     exitcode.KindInvalidChangelog,
 		},
 		{
@@ -206,16 +243,19 @@ func TestReadChangelogAllowsContactsFile(t *testing.T) {
 		"ru-RU/changelogs/42.txt": "Изменения",
 	})
 
-	text, err := app.ReadChangelog(root, 42)
+	report, err := app.ReadChangelog(root, 42)
 	if err != nil {
 		t.Fatalf("ReadChangelog: %v", err)
 	}
-	if text != "Изменения" {
-		t.Errorf("text = %q", text)
+	if report.Text != "Изменения" {
+		t.Errorf("text = %q", report.Text)
+	}
+	if len(report.Ignored) != 0 {
+		t.Errorf("ignored = %v, want пусто", report.Ignored)
 	}
 }
 
-func TestReadChangelogRejectsUnknownMetadataFile(t *testing.T) {
+func TestReadChangelogIgnoresUnknownMetadataFile(t *testing.T) {
 	t.Parallel()
 
 	root := writeMetadata(t, map[string]string{
@@ -223,11 +263,11 @@ func TestReadChangelogRejectsUnknownMetadataFile(t *testing.T) {
 		"ru-RU/changelogs/42.txt": "Изменения",
 	})
 
-	_, err := app.ReadChangelog(root, 42)
-	if err == nil {
-		t.Fatal("ожидалась ошибка")
+	report, err := app.ReadChangelog(root, 42)
+	if err != nil {
+		t.Fatalf("ReadChangelog: %v", err)
 	}
-	if !strings.Contains(err.Error(), "notes.txt") {
-		t.Errorf("err = %q", err)
+	if !slices.Equal(report.Ignored, []string{"notes.txt"}) {
+		t.Errorf("ignored = %v, want [notes.txt]", report.Ignored)
 	}
 }

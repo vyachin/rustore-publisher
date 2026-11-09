@@ -85,11 +85,18 @@ func newPublishCmd(a *App, g *globalFlags) *cobra.Command {
 
 			var changelog *string
 			if metadataDir != "" {
-				text, err := appcore.ReadChangelog(metadataDir, bundle.Identity.VersionCode)
+				read, err := appcore.ReadChangelog(metadataDir, bundle.Identity.VersionCode)
 				if err != nil {
 					return failPublish(a, g, result, PhasePreflight, err, appcore.PublishReport{})
 				}
-				changelog = &text
+				changelog = &read.Text
+				if len(read.Ignored) > 0 {
+					result.Warnings = append(result.Warnings, Warning{
+						Code: appcore.WarningMetadataIgnored,
+						Message: fmt.Sprintf("в каталоге метаданных не публикуются: %s",
+							strings.Join(read.Ignored, ", ")),
+					})
+				}
 			}
 
 			contacts, err := readContacts(contactsFile, metadataDir)
@@ -125,7 +132,7 @@ func newPublishCmd(a *App, g *globalFlags) *cobra.Command {
 			result.Outcome = report.Outcome
 			result.Skipped = report.Skipped
 			applyPublishReport(result, report)
-			result.Warnings = mapWarnings(report.Warnings)
+			result.Warnings = append(result.Warnings, mapWarnings(report.Warnings)...)
 
 			if g.JSON {
 				return EncodeJSON(a.Stdout, result)

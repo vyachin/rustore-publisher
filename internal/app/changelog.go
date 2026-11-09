@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"unicode/utf8"
@@ -18,35 +19,55 @@ const (
 	maxChangelogRunes = 5000
 )
 
+// ChangelogReport — список изменений версии и элементы каталога метаданных,
+// которые публикация не использует.
+type ChangelogReport struct {
+	Text    string
+	Ignored []string
+}
+
 // ReadChangelog читает список изменений для кода версии из каталога метаданных.
-// Поддерживается только раскладка metadata/ru-RU/changelogs/<versionCode>.txt.
-func ReadChangelog(metadataDir string, versionCode int64) (string, error) {
+// Обязательна раскладка metadata/ru-RU/changelogs/<versionCode>.txt. Остальные
+// элементы каталога не публикуются: они перечисляются в Ignored, чтобы один
+// каталог можно было передавать и инструменту карточки другого магазина.
+func ReadChangelog(metadataDir string, versionCode int64) (ChangelogReport, error) {
 	if versionCode <= 0 {
-		return "", exitcode.Errorf(exitcode.KindInvalidArguments,
+		return ChangelogReport{}, exitcode.Errorf(exitcode.KindInvalidArguments,
 			"код версии должен быть положительным, получен %d", versionCode)
 	}
 
-	localeDir, err := metadataLocaleDir(metadataDir)
+	ignored, err := ignoredMetadataEntries(metadataDir)
 	if err != nil {
-		return "", err
+		return ChangelogReport{}, err
 	}
 
-	changelogsDir, err := onlyEntry(filepath.Join(localeDir), changelogDirName,
-		"поддерживается только каталог changelogs; файлы карточки, изображений и тестировщиков не принимаются")
+	changelogsDir := filepath.Join(metadataDir, changelogLocale, changelogDirName)
+	info, err := os.Stat(changelogsDir)
 	if err != nil {
-		return "", err
+		return ChangelogReport{}, exitcode.WithHint(
+			exitcode.Wrap(exitcode.KindInvalidChangelog,
+				fmt.Errorf("прочитать каталог %q: %w", changelogsDir, err)),
+			"добавьте каталог "+changelogLocale+"/"+changelogDirName+" со списком изменений",
+		)
+	}
+	if !info.IsDir() {
+		return ChangelogReport{}, exitcode.WithHint(
+			exitcode.Errorf(exitcode.KindInvalidChangelog,
+				"%q не является каталогом", changelogsDir),
+			"добавьте каталог "+changelogLocale+"/"+changelogDirName+" со списком изменений",
+		)
 	}
 
 	entries, err := os.ReadDir(changelogsDir)
 	if err != nil {
-		return "", invalidChangelog("прочитать каталог %q: %v", changelogsDir, err)
+		return ChangelogReport{}, invalidChangelog("прочитать каталог %q: %v", changelogsDir, err)
 	}
 	for _, entry := range entries {
 		if strings.HasPrefix(entry.Name(), ".") {
 			continue
 		}
 		if entry.IsDir() || !isChangelogName(entry.Name()) {
-			return "", invalidChangelog("в каталоге %q найден посторонний элемент %q",
+			return ChangelogReport{}, invalidChangelog("в каталоге %q найден посторонний элемент %q",
 				changelogsDir, entry.Name())
 		}
 	}
@@ -56,29 +77,80 @@ func ReadChangelog(metadataDir string, versionCode int64) (string, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return "", exitcode.WithHint(
+			return ChangelogReport{}, exitcode.WithHint(
 				exitcode.Errorf(exitcode.KindInvalidChangelog,
 					"нет списка изменений для версии %d: ожидался файл %q", versionCode, path),
 				"добавьте metadata/ru-RU/changelogs/<код версии>.txt для этой сборки",
 			)
 		}
-		return "", invalidChangelog("прочитать %q: %v", path, err)
+		return ChangelogReport{}, invalidChangelog("прочитать %q: %v", path, err)
 	}
 
 	if !utf8.Valid(data) {
-		return "", invalidChangelog("файл %q содержит некорректный UTF-8", path)
+		return ChangelogReport{}, invalidChangelog("файл %q содержит некорректный UTF-8", path)
 	}
 
 	text := normalizeNewlines(string(data))
 	if strings.TrimSpace(text) == "" {
-		return "", invalidChangelog("файл %q пуст", path)
+		return ChangelogReport{}, invalidChangelog("файл %q пуст", path)
 	}
 	if runes := utf8.RuneCountInString(text); runes > maxChangelogRunes {
-		return "", invalidChangelog("файл %q содержит %d символов, допустимо не более %d",
+		return ChangelogReport{}, invalidChangelog("файл %q содержит %d символов, допустимо не более %d",
 			path, runes, maxChangelogRunes)
 	}
 
-	return text, nil
+	return ChangelogReport{Text: text, Ignored: ignored}, nil
+}
+
+// ignoredMetadataEntries перечисляет элементы каталога метаданных, которые не
+// участвуют в публикации: раскладку карточки другого магазина и служебные файлы.
+// Пути выводятся через косую черту, чтобы сообщение не зависело от платформы.
+func ignoredMetadataEntries(metadataDir string) ([]string, error) {
+	entries, err := os.ReadDir(metadataDir)
+	if err != nil {
+		return nil, exitcode.WithHint(
+			exitcode.Wrap(exitcode.KindInvalidChangelog,
+				fmt.Errorf("прочитать каталог метаданных %q: %w", metadataDir, err)),
+			"проверьте путь в --metadata-dir",
+		)
+	}
+
+	ignored := make([]string, 0, len(entries))
+	for _, entry := range entries {
+		name := entry.Name()
+		switch {
+		case strings.HasPrefix(name, "."):
+			continue
+		case entry.IsDir() && name == changelogLocale:
+			continue
+		case !entry.IsDir() && name == ContactsFileName:
+			continue
+		}
+		ignored = append(ignored, name)
+	}
+
+	localeDir := filepath.Join(metadataDir, changelogLocale)
+	localeEntries, err := os.ReadDir(localeDir)
+	if err != nil && !os.IsNotExist(err) {
+		return nil, exitcode.WithHint(
+			exitcode.Wrap(exitcode.KindInvalidChangelog,
+				fmt.Errorf("прочитать каталог %q: %w", localeDir, err)),
+			"проверьте раскладку "+changelogLocale,
+		)
+	}
+	for _, entry := range localeEntries {
+		name := entry.Name()
+		switch {
+		case strings.HasPrefix(name, "."):
+			continue
+		case entry.IsDir() && name == changelogDirName:
+			continue
+		}
+		ignored = append(ignored, filepath.ToSlash(filepath.Join(changelogLocale, name)))
+	}
+
+	sort.Strings(ignored)
+	return ignored, nil
 }
 
 // normalizeNewlines приводит переводы строк к LF: так текст сравнивается
@@ -86,82 +158,6 @@ func ReadChangelog(metadataDir string, versionCode int64) (string, error) {
 func normalizeNewlines(text string) string {
 	text = strings.ReplaceAll(text, "\r\n", "\n")
 	return strings.ReplaceAll(text, "\r", "\n")
-}
-
-// metadataLocaleDir находит каталог ru-RU в метаданных, разрешая рядом
-// необязательный файл контактов разработчика.
-func metadataLocaleDir(metadataDir string) (string, error) {
-	entries, err := os.ReadDir(metadataDir)
-	if err != nil {
-		return "", exitcode.WithHint(
-			exitcode.Wrap(exitcode.KindInvalidChangelog,
-				fmt.Errorf("прочитать каталог метаданных %q: %w", metadataDir, err)),
-			"проверьте путь в --metadata-dir",
-		)
-	}
-
-	found := ""
-	for _, entry := range entries {
-		if strings.HasPrefix(entry.Name(), ".") {
-			continue
-		}
-		if entry.IsDir() && entry.Name() == changelogLocale {
-			found = filepath.Join(metadataDir, entry.Name())
-			continue
-		}
-		if !entry.IsDir() && entry.Name() == ContactsFileName {
-			continue
-		}
-		return "", exitcode.WithHint(
-			exitcode.Errorf(exitcode.KindInvalidChangelog,
-				"в каталоге %q найден элемент %q", metadataDir, entry.Name()),
-			"поддерживаются локаль ru-RU и файл "+ContactsFileName,
-		)
-	}
-	if found == "" {
-		return "", exitcode.WithHint(
-			exitcode.Errorf(exitcode.KindInvalidChangelog,
-				"в каталоге %q нет %q", metadataDir, changelogLocale),
-			"добавьте каталог "+changelogLocale+" с changelogs",
-		)
-	}
-	return found, nil
-}
-
-// onlyEntry проверяет, что в каталоге есть ровно нужный подкаталог,
-// и игнорирует служебные файлы, начинающиеся с точки.
-func onlyEntry(dir, want, hint string) (string, error) {
-	entries, err := os.ReadDir(dir)
-	if err != nil {
-		return "", exitcode.WithHint(
-			exitcode.Wrap(exitcode.KindInvalidChangelog,
-				fmt.Errorf("прочитать каталог метаданных %q: %w", dir, err)),
-			"проверьте путь в --metadata-dir",
-		)
-	}
-
-	found := ""
-	for _, entry := range entries {
-		if strings.HasPrefix(entry.Name(), ".") {
-			continue
-		}
-		if !entry.IsDir() || entry.Name() != want {
-			return "", exitcode.WithHint(
-				exitcode.Errorf(exitcode.KindInvalidChangelog,
-					"в каталоге %q найден элемент %q", dir, entry.Name()),
-				hint,
-			)
-		}
-		found = filepath.Join(dir, entry.Name())
-	}
-	if found == "" {
-		return "", exitcode.WithHint(
-			exitcode.Errorf(exitcode.KindInvalidChangelog,
-				"в каталоге %q нет %q", dir, want),
-			hint,
-		)
-	}
-	return found, nil
 }
 
 // isChangelogName проверяет имя файла вида <код версии>.txt.

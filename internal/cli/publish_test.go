@@ -243,6 +243,63 @@ func TestPublishHappyPath(t *testing.T) {
 	}
 }
 
+func TestPublishAcceptsPlayMetadataLayout(t *testing.T) {
+	t.Parallel()
+
+	store := newPublishStore(t, 10)
+	metadata, text := writeChangelog(t, 42, "Заметки о выпуске")
+
+	listing := map[string]string{
+		"README.md":                  "документация каталога",
+		"ru-RU/title.txt":            "Приложение",
+		"ru-RU/full_description.txt": "Подробное описание",
+		"ru-RU/images/icon.png":      "картинка",
+	}
+	for name, body := range listing {
+		path := filepath.Join(metadata, name)
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatalf("mkdir: %v", err)
+		}
+		if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
+			t.Fatalf("write %s: %v", name, err)
+		}
+	}
+	aab := writeAAB(t, "com.example.app", 42)
+
+	code, stdout, stderr := runAPI(t, store.handler, "--json", "publish",
+		"-f", aab, "--metadata-dir", metadata)
+	if code != 0 {
+		t.Fatalf("code = %d, stderr = %q", code, stderr)
+	}
+
+	obj := decodeOne(t, stdout)
+	warnings, ok := obj["warnings"].([]any)
+	if !ok || len(warnings) == 0 {
+		t.Fatalf("warnings = %v", obj["warnings"])
+	}
+	found := false
+	for _, raw := range warnings {
+		warning, ok := raw.(map[string]any)
+		if !ok {
+			continue
+		}
+		if warning["code"] != "METADATA_IGNORED" {
+			continue
+		}
+		found = true
+		message, _ := warning["message"].(string)
+		if !strings.Contains(message, "ru-RU/title.txt") {
+			t.Errorf("message = %q", message)
+		}
+	}
+	if !found {
+		t.Errorf("нет предупреждения METADATA_IGNORED: %v", warnings)
+	}
+	if store.whatsNew != text {
+		t.Errorf("whatsNew = %q", store.whatsNew)
+	}
+}
+
 func TestPublishSkipExisting(t *testing.T) {
 	t.Parallel()
 
