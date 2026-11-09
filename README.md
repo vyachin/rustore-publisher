@@ -5,141 +5,306 @@
 [![Версия Go](https://img.shields.io/github/go-mod/go-version/vyachin/rustore-publisher)](go.mod)
 [![Лицензия](https://img.shields.io/github/license/vyachin/rustore-publisher)](LICENSE)
 
-CLI и составные действия GitHub Actions для публикации Android App Bundle
-в RuStore.
+**Отправляйте обновления Android-приложения в RuStore из терминала или CI.**
+`rustore-publisher` принимает готовый подписанный Android App Bundle (AAB),
+создаёт черновик версии, загружает сборку и отправляет её на модерацию.
+Список изменений и контакты разработчика можно хранить рядом с кодом.
 
-Статус: выпуск [0.0.2](https://github.com/vyachin/rustore-publisher/releases/latest).
-Все пять команд, архивы выпуска и GitHub Actions реализованы; чтения и отправка
-на модерацию проверены на живом приложении. Публикация после одобрения
-модерации ещё не подтверждена. План и чек-лист —
-[TODO.md](TODO.md), полный контракт — [docs/design.md](docs/design.md).
-
-## Возможности 0.0.2
-
-- `publish -f app.aab` — локальная проверка AAB и списка изменений, проверка
-  состояния приложения, создание черновика с ручной публикацией, потоковая
-  загрузка, ожидание обработки и отправка на модерацию.
-- `status -p PACKAGE [--version-id ID]` — статус версии, код версии, режим
-  публикации, комментарий модерации и живой черновик.
-- `doctor -p PACKAGE [-f app.aab]` — авторизация и проверки доступа без изменений
-  в магазине.
-- `version` и `completion` — сведения о сборке и скрипт автодополнения.
-
-`publish` только отправляет черновик на модерацию. После одобрения версия
-выпускается вручную в консоли RuStore; отдельной команды выпуска нет.
-
-## Требования
-
-- Go 1.27 или новее для сборки из исходников.
-- Активная версия приложения в RuStore и заранее настроенная подпись AAB.
-- Ключ API RuStore: `keyId` и приватный ключ RSA в Base64 (DER PKCS#8).
-
-## Учётные данные
-
-Файл в формате:
-
-```json
-{"keyId": "KEY_ID", "privateKey": "BASE64_PKCS8_RSA_PRIVATE_KEY"}
+```bash
+rustore-publisher publish -f app-release.aab --metadata-dir metadata
 ```
 
-Путь задаётся флагом `--credentials` или переменной окружения
-`RUSTORE_CREDENTIALS_FILE`; флаг имеет приоритет. Файл не добавляйте в Git,
-рекомендуется режим `0600`. Токены хранятся только в памяти и не выводятся
-в логах.
+Инструмент берёт на себя загрузку очередного обновления после сборки приложения.
+Один бинарный файл подходит для локального запуска и CI; для GitHub Actions
+есть готовые действия установки и публикации.
+
+По умолчанию после одобрения модерации вы выпускаете версию вручную в консоли
+RuStore. Если нужен автоматический выпуск, укажите `--publish-type instantly`.
+Команда дожидается отправки на модерацию и завершается, не ожидая её решения.
+
+## Когда использовать
+
+| Задача | Как решается |
+| --- | --- |
+| Отправить собранное обновление с компьютера | `publish` загружает AAB и отправляет версию на модерацию |
+| Проверить доступ и сборку перед отправкой | `doctor` проверяет доступ, `publish --dry-run` — готовность к отправке без записи |
+| Узнать, что происходит с отправленной версией | `status` показывает состояние и комментарий модерации |
+| Добавить отправку в процесс выпуска | Действие GitHub Actions вызывает тот же CLI |
+| Использовать CLI в другом CI или скрипте | Флаг `--json` даёт структурированный результат и коды ошибок |
+
+Проект рассчитан на **обновление уже опубликованного приложения**: в RuStore
+должна быть активная версия и заранее настроенная подпись AAB. Сборку и подпись
+выполняет ваш Android-проект. APK, первичная настройка приложения, загрузка
+иконок и скриншотов, изменение описания карточки и частичный охват
+не поддерживаются.
 
 ## Быстрый старт
 
+### 1. Установите CLI
+
+Скачайте архив для своей платформы из
+[выпуска v0.0.2](https://github.com/vyachin/rustore-publisher/releases/tag/v0.0.2),
+сверьте его с `checksums.txt`, распакуйте и добавьте каталог с бинарным файлом
+в `PATH`. Готовые сборки есть для Linux, macOS и Windows на amd64 и arm64;
+Go для их запуска не нужен. [Пример установки из архива](docs/actions.md#установка-cli).
+
+Если установлен Go версии, указанной в [go.mod](go.mod), можно собрать CLI:
+
 ```bash
+go install github.com/vyachin/rustore-publisher/cmd/rustore-publisher@v0.0.2
+```
+
+Каталог установки Go (по умолчанию `$HOME/go/bin`) должен быть в `PATH`.
+Проверьте запуск:
+
+```bash
+rustore-publisher version
+```
+
+### 2. Настройте доступ к RuStore
+
+Подготовьте ключ API с доступом к приложению и сохраните учётные данные
+в JSON-файле, например `$HOME/.config/rustore/credentials.json`:
+
+```json
+{
+  "keyId": "KEY_ID",
+  "privateKey": "BASE64_PKCS8_RSA_PRIVATE_KEY"
+}
+```
+
+`privateKey` — приватный ключ RSA в Base64, формат DER PKCS#8.
+Укажите путь к файлу:
+
+```bash
+chmod 600 "$HOME/.config/rustore/credentials.json"
 export RUSTORE_CREDENTIALS_FILE="$HOME/.config/rustore/credentials.json"
-# Используется https://public-api-m.rustore.ru; сертификаты Минцифры
-# встроены в бинарник.
+```
+
+Можно передать путь через `--credentials`; флаг имеет приоритет над переменной
+окружения. Не добавляйте файл в Git. Токены хранятся только в памяти
+и не выводятся в логах.
+
+По умолчанию CLI обращается к `https://public-api-m.rustore.ru`.
+Сертификаты Минцифры встроены в бинарный файл, устанавливать их в систему
+не требуется. [Источники и отпечатки сертификатов](internal/rustore/certs/README.md).
+
+### 3. Проверьте сборку и отправьте обновление
+
+Замените `com.example.app` на пакет своего приложения, а `app-release.aab` —
+на путь к готовой подписанной сборке. Её `versionCode` должен быть больше
+кода активной версии.
+
+```bash
+# Проверить доступ к приложению и локальный AAB.
 rustore-publisher doctor -p com.example.app -f app-release.aab
-rustore-publisher publish -f app-release.aab --metadata-dir metadata
+
+# Проверить готовность к отправке без изменений в магазине.
+rustore-publisher publish -f app-release.aab --dry-run
+
+# Создать черновик, загрузить AAB и отправить на модерацию.
+rustore-publisher publish -f app-release.aab
+
+# Позже проверить состояние версии.
 rustore-publisher status -p com.example.app
 ```
 
-## Сертификаты
+Пакет и код версии для `publish` читаются из AAB. Флаги `--package`
+и `--version-code` позволяют дополнительно проверить ожидаемые значения.
+Без каталога метаданных новая версия наследует список изменений и контакты
+активной версии; CLI предупреждает о наследовании списка изменений.
 
-Официальные корневой и промежуточный сертификаты Минцифры встроены в бинарный
-файл через `go:embed`, поэтому для домена `public-api-m.rustore.ru` не нужно
-передавать `SSL_CERT_FILE` или устанавливать CA в систему. Они добавляются
-к системному пулу только в HTTP-клиенте RuStore, а редиректы запрещены.
-Источники и отпечатки — в
-[internal/rustore/certs/README.md](internal/rustore/certs/README.md).
+## Сценарии использования
 
-## Метаданные
+### Отправить обновление со своим списком изменений
 
-Список изменений — `metadata/ru-RU/changelogs/<versionCode>.txt` в UTF-8,
-до 5000 символов. Без `--metadata-dir` поле `whatsNew` не передаётся, а CLI
-предупреждает, что пользователи увидят прежние заметки активной версии. Файлы
-карточки другого магазина (`title.txt`, описания, `images/`) не публикуются:
-CLI перечисляет их в предупреждении `METADATA_IGNORED`, поэтому один каталог
-можно передавать обоим инструментам.
+Для AAB с `versionCode=42` подготовьте файл `metadata/ru-RU/changelogs/42.txt`:
 
-Контакты разработчика можно передать файлом `metadata/developer-contacts.json`
-или явно через `--contacts-file`. Полный формат, правила проверки и примеры —
-в [docs/developer-contacts.md](docs/developer-contacts.md):
+```text
+metadata/
+└── ru-RU/
+    └── changelogs/
+        └── 42.txt
+```
+
+Запишите в него текст для пользователей, например «Исправлена загрузка профиля».
+Файл должен быть непустым, в UTF-8, до 5000 символов. Имя файла соответствует
+Android `versionCode`, а не `versionName`.
+
+```bash
+rustore-publisher publish -f app-release.aab --metadata-dir metadata --dry-run
+rustore-publisher publish -f app-release.aab --metadata-dir metadata
+```
+
+При переданном `--metadata-dir` файл для кода текущей сборки обязателен.
+Название, описания и `images/` из каталога другого магазина не загружаются:
+CLI перечисляет их в предупреждении `METADATA_IGNORED`. Поэтому один каталог
+метаданных можно использовать в процессах публикации для разных магазинов.
+
+Чтобы обновить и контакты разработчика, добавьте
+`metadata/developer-contacts.json`:
 
 ```json
 {
   "email": "dev@example.com",
-  "website": "https://example.com",
-  "vkCommunity": "https://vk.com/example",
-  "maxMessenger": "https://max.ru/example"
+  "website": "https://example.com"
 }
 ```
 
-Достаточно одного поля; неизвестные поля и некорректные email/адреса
-отклоняются до обращения к API. Без файла контакты наследуются из активной
-версии, как и остальные поля карточки.
+Достаточно одного поля. Другой путь можно задать через `--contacts-file`,
+в том числе без `--metadata-dir`. [Полный формат и правила проверки контактов](docs/developer-contacts.md).
+Остальные поля карточки наследуются из активной версии.
 
-## Режим публикации
+### Выпустить версию автоматически после модерации
 
-По умолчанию `--publish-type=manual`: после модерации нужен ручной выпуск
-в консоли. Режим `instantly` публикует версию автоматически после одобрения
-модерации и не требует подтверждения.
+```bash
+rustore-publisher publish -f app-release.aab \
+  --metadata-dir metadata --publish-type instantly
+```
 
-## Коды завершения
+| Режим | Что происходит после одобрения |
+| --- | --- |
+| `manual` — по умолчанию | Вы выпускаете версию вручную в консоли RuStore |
+| `instantly` | RuStore публикует версию автоматически |
 
-0 — успех, 1 — внутренняя ошибка, 2 — ввод, 3 — авторизация или доступ,
-4 — объект не найден, 5 — конфликт, 6 — временная ошибка или неизвестный
-результат, 7 — отклонение, 8 — требуется действие в консоли, 130 — прерывание.
-Полный список `error.code` — в [docs/design.md](docs/design.md).
+Оба режима отправляют версию на модерацию. Отдельной команды ручного выпуска
+в CLI нет.
 
-## JSON
+### Проверить отправленную версию
 
-С `--json` CLI печатает ровно один объект в stdout, диагностика идёт в stderr.
-Схема результата — [docs/schema/result.schema.json](docs/schema/result.schema.json),
-примеры — в [docs/schema/examples](docs/schema/examples).
+```bash
+# Показать последний выпуск и существующий черновик.
+rustore-publisher status -p com.example.app
 
-## GitHub Actions
+# Прочитать конкретную версию по идентификатору RuStore.
+rustore-publisher status -p com.example.app --version-id 123456
+```
 
-- `vyachin/rustore-publisher@v0.0.2` — установка CLI и публикация AAB.
-- `vyachin/rustore-publisher/setup@v0.0.2` — только установка CLI.
+В выводе доступны статус, код версии, режим публикации и комментарий модерации.
+`--version-id` — идентификатор RuStore, он отличается от Android `versionCode`.
 
-Входы, выходы, секреты и восстановление описаны в
-[docs/actions.md](docs/actions.md). Архивы выпуска собираются GoReleaser
-для Linux, macOS и Windows на amd64 и arm64; действия работают на Linux.
+### Повторить запуск после сбоя CI
 
-## Документация
+```bash
+rustore-publisher publish -f app-release.aab --if-exists skip
+```
 
-- [docs/design.md](docs/design.md) — контракт CLI, API, JSON и ошибок.
-- [docs/adr](docs/adr) — архитектурные решения.
-- [TODO.md](TODO.md) — план и состояние работ.
-- [AGENTS.md](AGENTS.md) — правила разработки.
+Если версия с таким кодом уже отправлена, команда завершится успешно
+с признаком `skipped=true`. По умолчанию используется `--if-exists fail`,
+и повторная отправка считается конфликтом.
 
-## Зависимости
+Существующий черновик останавливает отправку даже с `skip`: завершите
+или удалите его в консоли RuStore. CLI не заменяет черновики.
+Если результат записи неизвестен (`outcome_unknown=true`), сначала проверьте
+версию через `status` или консоль, прежде чем повторять отправку.
 
-Go-модули и версии GitHub Actions обновляет Dependabot раз в неделю
-(конфигурация — [.github/dependabot.yml](.github/dependabot.yml)).
+### Отправлять обновления из GitHub Actions
+
+Добавьте шаг публикации после сборки и подписи AAB. Ниже — фрагмент workflow;
+в отмеченном месте вставьте шаги сборки своего Android-проекта или загрузки
+готового артефакта:
+
+```yaml
+permissions:
+  contents: read
+
+concurrency:
+  group: rustore-com-example-app
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      # Здесь соберите и подпишите AAB или скачайте готовую сборку.
+      - uses: vyachin/rustore-publisher@v0.0.2
+        with:
+          version: 0.0.2
+          package: com.example.app
+          aab: app/build/outputs/bundle/release/app-release.aab
+          credentials-json-base64: ${{ secrets.RUSTORE_CREDENTIALS_BASE64 }}
+          metadata-dir: metadata
+          publish-type: manual
+          if-exists: skip
+```
+
+В секрете `RUSTORE_CREDENTIALS_BASE64` сохраните Base64 **всего JSON-файла**
+учётных данных. Это дополнительное кодирование файла, отдельное от Base64
+приватного ключа внутри него. Подготовить значение можно так:
+
+```bash
+# Linux
+base64 -w0 credentials.json
+
+# macOS
+base64 -i credentials.json | tr -d '\n'
+```
+
+Действия работают на Linux amd64/arm64. Для установки CLI без публикации
+используйте `vyachin/rustore-publisher/setup@v0.0.2` с `version: 0.0.2`.
+[Все входы, выходы и правила восстановления](docs/actions.md).
+
+### Получить результат для скрипта или другого CI
+
+```bash
+rustore-publisher status -p com.example.app --json > status.json
+rustore-publisher publish -f app-release.aab --json > publish-result.json
+```
+
+С `--json` в stdout выводится ровно один объект, диагностика идёт в stderr.
+Скрипт может проверить `outcome`, `version_id`, `submitted`, `skipped`
+и `error.code`. Успешная отправка на модерацию не означает, что версия уже
+доступна пользователям. [Схема результата](docs/schema/result.schema.json)
+и [примеры JSON](docs/schema/examples).
+
+Коды завершения: `0` — успех, `1` — внутренняя ошибка, `2` — неверный ввод,
+`3` — авторизация или доступ, `4` — объект не найден, `5` — конфликт,
+`6` — временная ошибка или неизвестный результат, `7` — отклонение,
+`8` — требуется действие в консоли, `130` — прерывание.
+
+## Справка и документация
+
+```bash
+rustore-publisher --help
+rustore-publisher publish --help
+rustore-publisher completion bash
+```
+
+Все команды: `doctor`, `status`, `publish`, `version`, `completion`.
+Общий таймаут команды по умолчанию — 30 минут (`--timeout`), отдельного
+запроса — 2 минуты (`--request-timeout`), ожидания обработки AAB — 2 минуты
+(`--processing-timeout`).
+
+- [Контракт CLI, API и ошибок](docs/design.md).
+- [Настройка GitHub Actions](docs/actions.md).
+- [Контакты разработчика](docs/developer-contacts.md).
+- [История версий](CHANGELOG.md).
+- [План и состояние работ](TODO.md).
+- [Архитектурные решения](docs/adr).
+
+В версии 0.0.2 чтения и отправка на модерацию проверены на живом приложении.
+Публикация после одобрения модерации ещё не подтверждена.
+
+## Разработка
+
+Проект написан на Go с Cobra. Для локальной сборки и проверки:
+
+```bash
+make build
+make test
+```
+
+Бинарный файл появится в `bin/rustore-publisher`.
+[Правила проекта](AGENTS.md) и [go.mod](go.mod) определяют требования
+к изменениям и версии Go. Go-модули и версии GitHub Actions обновляет
+Dependabot раз в неделю; конфигурация — [.github/dependabot.yml](.github/dependabot.yml).
 Dependabot alerts и security updates включены в настройках репозитория.
 
-## Как создавался проект
-
 Проект разработан при существенной помощи ИИ: DeepSeek Harness (deepseek-flash)
-и OpenAI Codex, под руководством и проверкой автора. Автор отвечает за
-архитектуру, процесс выпуска и проверку результатов.
+и OpenAI Codex, под руководством и проверкой автора. Автор отвечает
+за архитектуру, процесс выпуска и проверку результатов.
 
 ## Лицензия
 
-MIT, см. [LICENSE](LICENSE). История версий — [CHANGELOG.md](CHANGELOG.md).
+[MIT](LICENSE).
