@@ -7,8 +7,12 @@ import (
 	"strings"
 )
 
-// DefaultBaseURL — адрес Public API RuStore.
-const DefaultBaseURL = "https://public-api-m.rustore.ru"
+// DefaultBaseURL — адрес Public API RuStore с публичным сертификатом.
+const DefaultBaseURL = "https://public-api.rustore.ru"
+
+// NewBaseURL — новый домен RuStore с сертификатом Минцифры.
+// Для него нужен установленный корневой CA Минцифры.
+const NewBaseURL = "https://public-api-m.rustore.ru"
 
 // Нормализованные типы версии.
 const (

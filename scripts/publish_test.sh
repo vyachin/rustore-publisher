@@ -65,6 +65,7 @@ run_publish() {
 		RUSTORE_VERSION=0.0.1 \
 		RUSTORE_AAB="${work}/app.aab" \
 		RUSTORE_PACKAGE=com.example.app \
+		RUSTORE_API_URL=https://api.example.test \
 		RUSTORE_CREDENTIALS_FILE="${work}/creds.json" \
 		RUSTORE_METADATA_DIR=metadata \
 		RUSTORE_VERSION_CODE=42 \
@@ -100,6 +101,8 @@ check grep -q -- '--dry-run' "$args_file"
 check grep -q -- '--yes' "$args_file"
 check grep -q -- '--metadata-dir' "$args_file"
 check grep -q -- '--version-code' "$args_file"
+check grep -q -- '--api-url' "$args_file"
+check grep -q '^https://api.example.test$' "$args_file"
 check grep -q '^--publish-type$' "$args_file"
 check grep -q '^--if-exists$' "$args_file"
 check test "$(grep -A1 '^--credentials$' "$args_file" | tail -1 | wc -c)" -gt 1

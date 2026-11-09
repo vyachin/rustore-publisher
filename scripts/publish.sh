@@ -29,6 +29,7 @@ aab="${RUSTORE_AAB:-}"
 publish_type="${RUSTORE_PUBLISH_TYPE:-manual}"
 if_exists="${RUSTORE_IF_EXISTS:-fail}"
 metadata_dir="${RUSTORE_METADATA_DIR:-}"
+api_url="${RUSTORE_API_URL:-}"
 version_code="${RUSTORE_VERSION_CODE:-}"
 timeout_value="${RUSTORE_TIMEOUT:-}"
 request_timeout="${RUSTORE_REQUEST_TIMEOUT:-}"
@@ -107,6 +108,9 @@ fi
 args=(publish --json --publish-type "$publish_type" --if-exists "$if_exists" --aab "$(resolve_path "$aab")")
 if [ -n "$package" ]; then
 	args+=(--package "$package")
+fi
+if [ -n "$api_url" ]; then
+	args+=(--api-url "$api_url")
 fi
 if [ -n "$metadata_dir" ]; then
 	args+=(--metadata-dir "$(resolve_path "$metadata_dir")")

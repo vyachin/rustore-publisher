@@ -112,7 +112,7 @@ func (c *Client) authorize(ctx context.Context) (string, time.Duration, error) {
 	}
 	return "", 0, exitcode.WithHint(
 		exitcode.Wrap(exitcode.KindAPIUnavailable, lastErr),
-		"повторите команду позже или проверьте доступность API RuStore",
+		apiUnavailableHint(lastErr),
 	)
 }
 

@@ -133,7 +133,7 @@ func printFact(w io.Writer, title string, fact *VersionFact) {
 		details = append(details, fmt.Sprintf("охват: %d%%", *fact.PartialValue))
 	}
 	if fact.SendDateForModer != nil && *fact.SendDateForModer != "" {
-		details = append(details, "на модерации с "+*fact.SendDateForModer)
+		details = append(details, "отправлено на модерацию: "+*fact.SendDateForModer)
 	}
 	if len(details) > 0 {
 		_, _ = fmt.Fprintf(w, "  %s\n", strings.Join(details, ", "))

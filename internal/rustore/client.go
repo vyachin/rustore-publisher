@@ -4,12 +4,14 @@ import (
 	"bytes"
 	"context"
 	"crypto/rsa"
+	"crypto/x509"
 	"encoding/json"
 	"errors"
 	"io"
 	"log/slog"
 	"math/rand/v2"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
@@ -134,8 +136,36 @@ func (c *Client) do(ctx context.Context, method, path string, query map[string]s
 	}
 	return nil, exitcode.WithHint(
 		exitcode.Wrap(exitcode.KindAPIUnavailable, lastErr),
-		"повторите команду позже или проверьте доступность API RuStore",
+		apiUnavailableHint(lastErr),
 	)
+}
+
+// apiUnavailableHint объясняет недоступность API, включая недоверенный TLS.
+func apiUnavailableHint(err error) string {
+	if isCertificateError(err) {
+		return "сертификат API не доверен: для " + NewBaseURL +
+			" установите корневой CA Минцифры в SSL_CERT_FILE" +
+			" или укажите --api-url " + DefaultBaseURL
+	}
+	return "повторите команду позже или проверьте доступность API RuStore"
+}
+
+// isCertificateError сообщает, что TLS-сертификат сервера не доверен.
+func isCertificateError(err error) bool {
+	var unknown x509.UnknownAuthorityError
+	if errors.As(err, &unknown) {
+		return true
+	}
+	var invalid x509.CertificateInvalidError
+	if errors.As(err, &invalid) {
+		return true
+	}
+	var hostname x509.HostnameError
+	if errors.As(err, &hostname) {
+		return true
+	}
+	message := err.Error()
+	return strings.Contains(message, "x509:") || strings.Contains(message, "certificate")
 }
 
 // safeToRetry сообщает, можно ли повторять операцию автоматически.

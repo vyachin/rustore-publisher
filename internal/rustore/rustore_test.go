@@ -474,3 +474,24 @@ func TestVersionDetailNotFound(t *testing.T) {
 		t.Errorf("KindOf = %q", kind)
 	}
 }
+
+func TestCertificateErrorHint(t *testing.T) {
+	t.Parallel()
+
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		writeJSON(w, http.StatusOK, `{"code":"OK","body":{"content":[],"totalPages":1}}`)
+	}))
+	t.Cleanup(server.Close)
+
+	client := mustClient(t, server.URL, time.Now, rsaKey(t))
+	_, err := client.ListVersions(context.Background(), "com.example.app", rustore.ListOptions{})
+	if err == nil {
+		t.Fatal("ожидалась ошибка сертификата")
+	}
+	if kind := exitcode.KindOf(err); kind != exitcode.KindAPIUnavailable {
+		t.Errorf("KindOf = %q", kind)
+	}
+	if hint := exitcode.HintOf(err); !strings.Contains(hint, "сертификат") {
+		t.Errorf("hint = %q", hint)
+	}
+}

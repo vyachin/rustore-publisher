@@ -12,6 +12,7 @@ import (
 
 	"github.com/vyachin/rustore-publisher/internal/exitcode"
 	"github.com/vyachin/rustore-publisher/internal/logging"
+	"github.com/vyachin/rustore-publisher/internal/rustore"
 )
 
 // globalFlags — флаги, общие для всех команд.
@@ -21,6 +22,7 @@ type globalFlags struct {
 	Timeout        time.Duration
 	RequestTimeout time.Duration
 	Credentials    string
+	APIURL         string
 	cancel         context.CancelFunc
 }
 
@@ -142,6 +144,8 @@ func newRootCmd(app *App) (*cobra.Command, *globalFlags) {
 		"бюджет одного запроса к API, по умолчанию 2m")
 	flags.StringVar(&g.Credentials, "credentials", "",
 		"путь к файлу учётных данных (или RUSTORE_CREDENTIALS_FILE)")
+	flags.StringVar(&g.APIURL, "api-url", "",
+		"адрес Public API RuStore (или RUSTORE_API_URL); по умолчанию "+rustore.DefaultBaseURL)
 
 	root.AddCommand(
 		newPublishCmd(app, g),

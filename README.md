@@ -45,6 +45,9 @@ Actions реализованы; остаются проверка на тест�
 
 ```bash
 export RUSTORE_CREDENTIALS_FILE="$HOME/.config/rustore/credentials.json"
+# По умолчанию используется https://public-api.rustore.ru с публичным сертификатом.
+# Для https://public-api-m.rustore.ru установите корневой CA Минцифры и задайте
+# --api-url или RUSTORE_API_URL.
 rustore-publisher doctor -p com.example.app -f app-release.aab
 rustore-publisher publish -f app-release.aab --metadata-dir metadata
 rustore-publisher status -p com.example.app
