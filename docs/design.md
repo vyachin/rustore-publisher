@@ -1,7 +1,8 @@
 # Контракт и устройство rustore-publisher 0.0.1
 
 Этот документ — единственный источник подробных проектных решений. Реализация
-ещё не началась; непроверенные свойства API отмечены явно. План и состояние работ
+идёт: `version`, `completion`, `status` и `doctor` готовы, `publish` — следующий
+этап; непроверенные на живом аккаунте свойства API отмечены явно. План и состояние работ
 находятся в [TODO.md](../TODO.md), правила — в [AGENTS.md](../AGENTS.md).
 
 Команды: `doctor`, `status`, `version`, `completion`, `publish`. Режим по умолчанию —
@@ -18,7 +19,7 @@ CLI не собирает и не подписывает AAB.
 | Область | Вывод и следствие для реализации |
 | --- | --- |
 | Предварительные условия | Нужна активная версия приложения. Подпись AAB должна быть заранее настроена в консоли. |
-| Авторизация | Подписать `keyId + timestamp` алгоритмом RSA PKCS#1 v1.5 / SHA-512, закодировать подпись в Base64 и вызвать `POST /public/auth/`. Передавать полученный JWE в `Public-Token`. Использовать `ttl` (в документации — 900 секунд); обновлять токен до истечения срока. Расхождение времени не должно превышать 60 секунд. |
+| Авторизация | Подписать `keyId + timestamp` алгоритмом RSA PKCS#1 v1.5 / SHA-512, закодировать подпись в Base64 и вызвать `POST /public/auth/`. Базовый адрес API — `https://public-api-m.rustore.ru`. Передавать полученный JWE в `Public-Token`. Использовать `ttl` (в документации — 900 секунд); обновлять токен до истечения срока. Расхождение времени не должно превышать 60 секунд. |
 | Загрузка | Поле multipart — `file`, один AAB до 5 ГБ, код версии выше активной. API позволяет обновлять AAB той же версии. Возможны один AAB и до 8 APK либо до 10 APK без AAB; CLI 0.0.1 загружает только один AAB. Возобновление передачи с прерванного байта не документировано. |
 | Публикация | Создать черновик, загрузить файл, отправить на модерацию. `publishType` и `publishDateTime` относятся к телу создания черновика; в 0.0.1 CLI передаёт только `manual` или `instantly` без даты. У commit — query-параметр `priorityUpdate`, передаём 0. Успешная отправка не означает доступность пользователям; режим по умолчанию CLI — MANUAL, API — INSTANTLY. |
 | Ручной выпуск | Метод публикации требует одобрения модерации и ручного режима публикации. |
@@ -106,6 +107,32 @@ docs/               Контракт CLI, настройка, архитекту
 Не переносить учётные данные или результаты сборки. Схему манифеста сверять с официальной схемой AOSP
 [Resources.proto](https://android.googlesource.com/platform/frameworks/base/+/refs/heads/main/tools/aapt2/Resources.proto),
 соблюдая условия использования внешних зависимостей.
+
+### Методы API, сверенные с документацией
+
+Проверено по страницам документации 2026-11-09; ответы на живом аккаунте ещё
+не сняты, поэтому структуры считаются ожидаемыми, а не гарантированными.
+
+- `POST /public/auth/` принимает `keyId`, `timestamp` и `signature`. `timestamp` —
+  строка с миллисекундами и смещением, например `2026-11-09T18:00:00.000+03:00`;
+  отклонение от серверного времени не более 60 секунд. Подпись — SHA512withRSA
+  от `keyId+timestamp` в Base64. Ответ: `code`, `message`, `body.jwe`,
+  `body.ttl` (900 секунд) и `timestamp`.
+- `GET /public/v1/application/{package}/version` — список версий. Параметры:
+  `ids`, `versionStatuses`, `filterTestingType` (`ALL`, `RELEASE`, `ALPHA`;
+  в документации встречается опечатка с кириллической `А`), `page` с нуля,
+  `size` до 100. Ответ: `body.content[]`, `pageNumber`, `pageSize`,
+  `totalElements`, `totalPages`.
+- `GET /public/v2/application/{package}/version/{versionId}` — подробности.
+  Используются `statusComment`, `permissions` (категория → `permission` и
+  `description`), `packages[].verCode`, `isMainApk`, `servicesType` и
+  `autoDetectedSdks` (категория → список), `testingType` (`ALPHA`, `BETA`,
+  `PRODUCTION`).
+- Поле типа версии в списке документация называет `filterTestingType`, а пример
+  ответа содержит `testingType`. CLI принимает оба имени и не считает
+  отсутствие поля явным null.
+- `appType` в списке — `MAIN` или `GAME`, в подробностях — `MAIN` или `GAMES`;
+  оба значения игр читаются как игры.
 
 ## Предлагаемый контракт команд версии 0.0.1
 
@@ -354,6 +381,9 @@ DRAFT без даты сразу после таймаута не доказыв
 Идентификаторы и versionCode — целые числа или null; строки — string/null;
 permissions/auto_detected_sdks — object/null. Поля отражают факты, не намерение:
 неизвестные submitted/published — null, skipped/manual_action/outcome_unknown — bool.
+`submitted=true` при непустом `sendDateForModer`, иначе false. `published=true`
+для `ACTIVE`, `PARTIAL_ACTIVE`, `PREVIOUS_ACTIVE` и `ARCHIVED`, false для
+остальных известных статусов и null для неизвестного.
 Отсутствующее testingType различать с явным null внутри парсера. В JSON
 `testing_type` — release|alpha|unknown, сырое поле хранить в testing_type_raw.
 `publish_type` — manual|instantly|unknown|null; version_status сохраняет

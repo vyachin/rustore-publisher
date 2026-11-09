@@ -3,8 +3,9 @@
 CLI и составные действия GitHub Actions для публикации Android App Bundle
 в RuStore.
 
-Статус: версия 0.0.1 в разработке, команды ещё не реализованы. План и чек-лист —
-[TODO.md](TODO.md), полный контракт — [docs/design.md](docs/design.md).
+Статус: версия 0.0.1 в разработке. Готовы `version`, `completion`, `doctor`
+и `status`; `publish` реализуется следующим. План и чек-лист — [TODO.md](TODO.md),
+полный контракт — [docs/design.md](docs/design.md).
 
 ## Возможности 0.0.1
 
