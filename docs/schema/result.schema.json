@@ -149,7 +149,10 @@
       ],
       "properties": {
         "schema_version": { "const": 1 },
-        "command": { "enum": ["publish", "doctor", "status", "version", "completion"] },
+        "command": {
+          "enum": ["publish", "doctor", "status", "version", "completion", "rustore-publisher"],
+          "description": "Имя выполненной команды. rustore-publisher используется для ошибок до выбора подкоманды."
+        },
         "package": { "type": ["string", "null"] },
         "version_code": { "type": ["integer", "null"] },
         "version_id": { "type": ["integer", "null"] },
