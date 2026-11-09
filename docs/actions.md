@@ -81,7 +81,7 @@ base64 -i rustore.json    # macOS, без переносов строк
 | `credentials-json-base64` | — | Весь JSON учётных данных в Base64 |
 | `credentials-file` | — | Путь к файлу учётных данных |
 | `metadata-dir` | — | Каталог `metadata` со списком изменений и контактами |
-| `contacts-file` | `metadata/developer-contacts.json` | Файл контактов разработчика |
+| `contacts-file` | `metadata/developer-contacts.json` | Файл контактов разработчика, формат — [developer-contacts.md](developer-contacts.md) |
 | `version-code` | из AAB | Ожидаемый код версии |
 | `publish-type` | `manual` | `manual` или `instantly` |
 | `if-exists` | `fail` | `fail` или `skip` для уже отправленной версии |

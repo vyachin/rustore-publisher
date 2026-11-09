@@ -70,7 +70,8 @@ rustore-publisher status -p com.example.app
 локали и файлы карточки в 0.0.1 отклоняются.
 
 Контакты разработчика можно передать файлом `metadata/developer-contacts.json`
-или явно через `--contacts-file`:
+или явно через `--contacts-file`. Полный формат, правила проверки и примеры —
+в [docs/developer-contacts.md](docs/developer-contacts.md):
 
 ```json
 {

@@ -245,6 +245,8 @@ metadata/developer-contacts.json
 
 Контакты разработчика: необязательный `developer-contacts.json` в корне
 `--metadata-dir` либо путь из `--contacts-file`; флаг важнее файла в метаданных.
+Формат, примеры и коды ошибок описаны в
+[developer-contacts.md](developer-contacts.md).
 JSON содержит поля `email`, `website`, `vkCommunity`, `maxMessenger`; неизвестные
 поля отклоняются, достаточно одного непустого значения, email проверяется по
 простому формату, адреса — по схеме http(s). Контакты передаются как
