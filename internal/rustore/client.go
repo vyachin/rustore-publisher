@@ -148,7 +148,7 @@ func (c *Client) do(ctx context.Context, method, path string, query map[string]s
 func apiUnavailableHint(err error) string {
 	if isCertificateError(err) {
 		return "сертификат API не доверен даже со встроенными сертификатами Минцифры: " +
-			"проверьте системное время и прокси; можно использовать --api-url " + LegacyBaseURL
+			"проверьте системное время и прокси"
 	}
 	return "повторите команду позже или проверьте доступность API RuStore"
 }

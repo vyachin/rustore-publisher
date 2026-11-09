@@ -7,13 +7,9 @@ import (
 	"strings"
 )
 
-// DefaultBaseURL — рекомендуемый домен Public API RuStore. Его цепочка
-// проверяется встроенным корневым сертификатом Минцифры.
+// DefaultBaseURL — адрес Public API RuStore. Цепочка проверяется
+// встроенным корневым сертификатом Минцифры.
 const DefaultBaseURL = "https://public-api-m.rustore.ru"
-
-// LegacyBaseURL — старый домен с публичным сертификатом. RuStore выводит
-// его из эксплуатации; оставлен для явного выбора через --api-url.
-const LegacyBaseURL = "https://public-api.rustore.ru"
 
 // Нормализованные типы версии.
 const (
