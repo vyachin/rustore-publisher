@@ -1,0 +1,30 @@
+{
+  "schema_version": 1,
+  "command": "publish",
+  "package": "com.example.app",
+  "version_code": 42,
+  "version_id": 123456,
+  "phase": "status",
+  "outcome": "submitted",
+  "version_status": "MODERATION",
+  "testing_type": "release",
+  "testing_type_raw": null,
+  "publish_type": "manual",
+  "partial_value": 100,
+  "whats_new": null,
+  "send_date_for_moder": "2026-11-09T18:00:00Z",
+  "submitted": true,
+  "published": false,
+  "skipped": false,
+  "manual_action": false,
+  "outcome_unknown": false,
+  "permissions": null,
+  "auto_detected_sdks": null,
+  "warnings": [
+    {
+      "code": "CHANGELOG_INHERITED",
+      "message": "Список изменений не передан: пользователи увидят заметки активной версии."
+    }
+  ],
+  "error": null
+}

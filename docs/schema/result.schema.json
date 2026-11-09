@@ -1,0 +1,250 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/vyachin/rustore-publisher/docs/schema/result.schema.json",
+  "title": "Результат rustore-publisher --json",
+  "description": "Один объект, который CLI печатает в stdout с флагом --json: результат publish, doctor или status, успешный результат version либо объект ошибки. Поля отражают факты, а не намерение: неизвестные submitted, published, testing_type и подобные значения равны null. Сырые значения RuStore сохраняются в version_status и testing_type_raw и не расширяют перечисления.",
+  "oneOf": [
+    { "$ref": "#/$defs/result" },
+    { "$ref": "#/$defs/version_success" }
+  ],
+  "$defs": {
+    "warning": {
+      "type": "object",
+      "description": "Предупреждение CLI. Текст сообщения не используется для ветвления.",
+      "additionalProperties": false,
+      "required": ["code", "message"],
+      "properties": {
+        "code": {
+          "enum": [
+            "CHANGELOG_INHERITED",
+            "UNKNOWN_REMOTE_VALUE",
+            "STATUS_UNAVAILABLE"
+          ]
+        },
+        "message": { "type": "string" }
+      }
+    },
+    "error": {
+      "type": "object",
+      "description": "Известная ошибка команды. hint содержит следующие действия пользователя.",
+      "additionalProperties": false,
+      "required": ["code", "message", "hint"],
+      "properties": {
+        "code": {
+          "enum": [
+            "INTERNAL_ERROR",
+            "API_RESPONSE_INVALID",
+            "INVALID_ARGUMENTS",
+            "INVALID_CREDENTIALS",
+            "INVALID_AAB",
+            "INVALID_CHANGELOG",
+            "AUTH_FAILED",
+            "ACCESS_DENIED",
+            "APPLICATION_NOT_FOUND",
+            "VERSION_NOT_FOUND",
+            "EXISTING_DRAFT",
+            "VERSION_EXISTS",
+            "VERSION_STATE_CONFLICT",
+            "VERSION_UNAVAILABLE",
+            "REMOTE_STATE_MISMATCH",
+            "API_UNAVAILABLE",
+            "COMMAND_TIMEOUT",
+            "REQUEST_TIMEOUT",
+            "AAB_PROCESSING_TIMEOUT",
+            "OUTCOME_UNKNOWN",
+            "VERSION_REJECTED",
+            "BUILD_REJECTED",
+            "API_REJECTED",
+            "AAB_SIGNING_REQUIRED",
+            "PERMISSION_DECLARATION_REQUIRED",
+            "INTERRUPTED"
+          ]
+        },
+        "message": { "type": "string" },
+        "hint": { "type": "string" }
+      }
+    },
+    "testing_type": {
+      "description": "Нормализованный тип версии: release при явном testingType=null, alpha для строки alpha без учёта регистра, unknown в остальных случаях. Отсутствие поля и явный null различаются внутри парсера, но не в JSON.",
+      "enum": ["release", "alpha", "unknown", null]
+    },
+    "version_fact": {
+      "type": "object",
+      "description": "Сведения об одной версии в status.latest_release и status.draft, без вложенных результатов.",
+      "additionalProperties": false,
+      "required": [
+        "version_id",
+        "version_code",
+        "version_status",
+        "testing_type",
+        "testing_type_raw",
+        "publish_type",
+        "partial_value",
+        "whats_new",
+        "send_date_for_moder",
+        "submitted",
+        "published",
+        "permissions",
+        "auto_detected_sdks"
+      ],
+      "properties": {
+        "version_id": { "type": ["integer", "null"] },
+        "version_code": { "type": ["integer", "null"] },
+        "version_status": {
+          "type": ["string", "null"],
+          "description": "Сырое значение статуса RuStore, например DRAFT или ACTIVE."
+        },
+        "testing_type": { "$ref": "#/$defs/testing_type" },
+        "testing_type_raw": { "type": ["string", "null"] },
+        "publish_type": {
+          "enum": ["manual", "instantly", "unknown", null]
+        },
+        "partial_value": { "enum": [5, 10, 25, 50, 75, 100, null] },
+        "whats_new": { "type": ["string", "null"] },
+        "send_date_for_moder": {
+          "type": ["string", "null"],
+          "description": "Дата отправки на модерацию в том виде, в каком её вернул RuStore; формат не гарантируется."
+        },
+        "submitted": { "type": ["boolean", "null"] },
+        "published": { "type": ["boolean", "null"] },
+        "permissions": {
+          "type": ["object", "null"],
+          "description": "Необязательные данные RuStore о разрешениях; структура принадлежит API и не фиксируется схемой.",
+          "additionalProperties": true
+        },
+        "auto_detected_sdks": {
+          "type": ["object", "null"],
+          "description": "Необязательные данные RuStore об автоопределённых SDK; структура принадлежит API.",
+          "additionalProperties": true
+        }
+      }
+    },
+    "result": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "command",
+        "package",
+        "version_code",
+        "version_id",
+        "phase",
+        "outcome",
+        "version_status",
+        "testing_type",
+        "testing_type_raw",
+        "publish_type",
+        "partial_value",
+        "whats_new",
+        "send_date_for_moder",
+        "submitted",
+        "published",
+        "skipped",
+        "manual_action",
+        "outcome_unknown",
+        "permissions",
+        "auto_detected_sdks",
+        "warnings",
+        "error"
+      ],
+      "properties": {
+        "schema_version": { "const": 1 },
+        "command": { "enum": ["publish", "doctor", "status", "version", "completion"] },
+        "package": { "type": ["string", "null"] },
+        "version_code": { "type": ["integer", "null"] },
+        "version_id": { "type": ["integer", "null"] },
+        "phase": {
+          "enum": ["preflight", "auth", "create", "upload", "processing", "commit", "status"]
+        },
+        "outcome": {
+          "enum": ["submitted", "skipped", "dry_run", "inspected", "failed", "unknown"]
+        },
+        "version_status": { "type": ["string", "null"] },
+        "testing_type": { "$ref": "#/$defs/testing_type" },
+        "testing_type_raw": { "type": ["string", "null"] },
+        "publish_type": { "enum": ["manual", "instantly", "unknown", null] },
+        "partial_value": { "enum": [5, 10, 25, 50, 75, 100, null] },
+        "whats_new": { "type": ["string", "null"] },
+        "send_date_for_moder": { "type": ["string", "null"] },
+        "submitted": { "type": ["boolean", "null"] },
+        "published": { "type": ["boolean", "null"] },
+        "skipped": { "type": "boolean" },
+        "manual_action": { "type": "boolean" },
+        "outcome_unknown": { "type": "boolean" },
+        "permissions": { "type": ["object", "null"], "additionalProperties": true },
+        "auto_detected_sdks": { "type": ["object", "null"], "additionalProperties": true },
+        "warnings": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/warning" }
+        },
+        "error": {
+          "oneOf": [
+            { "$ref": "#/$defs/error" },
+            { "type": "null" }
+          ]
+        },
+        "latest_release": {
+          "oneOf": [
+            { "$ref": "#/$defs/version_fact" },
+            { "type": "null" }
+          ]
+        },
+        "draft": {
+          "oneOf": [
+            { "$ref": "#/$defs/version_fact" },
+            { "type": "null" }
+          ]
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "required": ["command"],
+            "properties": { "command": { "const": "status" } }
+          },
+          "then": {
+            "required": ["latest_release", "draft"]
+          },
+          "else": {
+            "not": {
+              "anyOf": [
+                { "required": ["latest_release"] },
+                { "required": ["draft"] }
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "required": ["command"],
+            "properties": { "command": { "enum": ["version", "completion"] } }
+          },
+          "then": {
+            "required": ["error"],
+            "properties": {
+              "phase": { "const": "preflight" },
+              "outcome": { "const": "failed" },
+              "error": { "$ref": "#/$defs/error" }
+            }
+          }
+        }
+      ]
+    },
+    "version_success": {
+      "type": "object",
+      "description": "Успешный результат version --json. Ошибки version и completion используют общий объект результата.",
+      "additionalProperties": false,
+      "required": ["schema_version", "command", "version", "commit", "build_date"],
+      "properties": {
+        "schema_version": { "const": 1 },
+        "command": { "const": "version" },
+        "version": { "type": "string" },
+        "commit": { "type": "string" },
+        "build_date": {
+          "type": "string",
+          "description": "Дата сборки в RFC3339 либо пустая строка, если она не задана при сборке."
+        }
+      }
+    }
+  }
+}

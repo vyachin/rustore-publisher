@@ -1,0 +1,29 @@
+{
+  "schema_version": 1,
+  "command": "publish",
+  "package": "com.example.app",
+  "version_code": 42,
+  "version_id": 123456,
+  "phase": "upload",
+  "outcome": "failed",
+  "version_status": "DRAFT",
+  "testing_type": "release",
+  "testing_type_raw": null,
+  "publish_type": "manual",
+  "partial_value": 100,
+  "whats_new": null,
+  "send_date_for_moder": null,
+  "submitted": false,
+  "published": null,
+  "skipped": false,
+  "manual_action": true,
+  "outcome_unknown": false,
+  "permissions": null,
+  "auto_detected_sdks": null,
+  "warnings": [],
+  "error": {
+    "code": "AAB_SIGNING_REQUIRED",
+    "message": "API сообщает, что для приложения не настроена подпись AAB.",
+    "hint": "Настройте подпись AAB в консоли RuStore для com.example.app и повторите загрузку."
+  }
+}

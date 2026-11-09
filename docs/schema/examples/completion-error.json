@@ -1,0 +1,29 @@
+{
+  "schema_version": 1,
+  "command": "completion",
+  "package": null,
+  "version_code": null,
+  "version_id": null,
+  "phase": "preflight",
+  "outcome": "failed",
+  "version_status": null,
+  "testing_type": null,
+  "testing_type_raw": null,
+  "publish_type": null,
+  "partial_value": null,
+  "whats_new": null,
+  "send_date_for_moder": null,
+  "submitted": null,
+  "published": null,
+  "skipped": false,
+  "manual_action": false,
+  "outcome_unknown": false,
+  "permissions": null,
+  "auto_detected_sdks": null,
+  "warnings": [],
+  "error": {
+    "code": "INVALID_ARGUMENTS",
+    "message": "completion не поддерживает вывод JSON.",
+    "hint": "Запустите completion без --json, чтобы получить скрипт оболочки."
+  }
+}

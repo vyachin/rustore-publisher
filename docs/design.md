@@ -341,9 +341,10 @@ DRAFT без даты сразу после таймаута не доказыв
 ### JSON-контракт и закрытые перечисления
 
 С `--json` выводить ровно один объект в stdout, включая ошибки; логи — stderr.
-До реализации зафиксировать машинную JSON Schema, примеры и контрактные тесты
-на основе следующих обязательных правил. Изменять перечисления только вместе
-с версией схемы и документацией; сырые значения RuStore не расширяют наши enum.
+Машинная схема — [schema/result.schema.json](schema/result.schema.json), примеры —
+в [schema/examples](schema/examples). Соответствие примеров схеме проверяется
+контрактным тестом. Изменять перечисления только вместе с версией схемы
+и документацией; сырые значения RuStore не расширяют наши enum.
 
 Объект publish/doctor/status содержит `schema_version=1`, `command`, `package`,
 `version_code`, `version_id`, `phase`, `outcome`, `version_status`, `testing_type`,
@@ -359,7 +360,8 @@ permissions/auto_detected_sdks — object/null. Поля отражают фак
 строку RuStore. Массив warnings содержит объекты code/message; error — null
 при успехе либо объект code/message/hint. status дополнительно содержит
 `latest_release` и `draft` того же формата фактов о версии без рекурсивных результатов;
-без --version-id верхние поля одной версии null, сведения находятся в этих объектах.
+без --version-id верхние поля одной версии null, сведения находятся в этих объектах;
+с --version-id верхние поля заполнены, а `latest_release` и `draft` равны null.
 
 Закрытый `phase`: `preflight|auth|create|upload|processing|commit|status`.
 Сверка сразу после создания относится к create, после загрузки — processing.
@@ -370,7 +372,10 @@ permissions/auto_detected_sdks — object/null. Поля отражают фак
 Первые три — publish, inspected — успешный doctor/status, failed — известная ошибка,
 unknown — недоказанный результат записи и outcome_unknown=true. Для обычной ошибки
 чтения использовать failed. При сигнале с неопределённой записью — unknown и код 130.
-version имеет отдельный успешный объект version/commit/build_date, completion — скрипт.
+Успешный `version --json` — отдельный объект `schema_version`, `command`, `version`,
+`commit`, `build_date`; ошибки `version` и `completion` используют общий объект
+результата. `completion` без `--json` выводит скрипт оболочки, с `--json` — ошибку
+`INVALID_ARGUMENTS` и код 2.
 
 Полный закрытый список `error.code` для 0.0.1:
 

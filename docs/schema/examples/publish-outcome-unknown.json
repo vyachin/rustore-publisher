@@ -1,0 +1,29 @@
+{
+  "schema_version": 1,
+  "command": "publish",
+  "package": "com.example.app",
+  "version_code": 42,
+  "version_id": 123456,
+  "phase": "upload",
+  "outcome": "unknown",
+  "version_status": "DRAFT",
+  "testing_type": "release",
+  "testing_type_raw": null,
+  "publish_type": "manual",
+  "partial_value": 100,
+  "whats_new": "Исправлены ошибки и ускорен запуск.",
+  "send_date_for_moder": null,
+  "submitted": null,
+  "published": null,
+  "skipped": false,
+  "manual_action": false,
+  "outcome_unknown": true,
+  "permissions": null,
+  "auto_detected_sdks": null,
+  "warnings": [],
+  "error": {
+    "code": "OUTCOME_UNKNOWN",
+    "message": "Результат загрузки AAB не подтверждён.",
+    "hint": "Проверьте версию 123456 командой status и в консоли RuStore; не начинайте новую публикацию до выяснения."
+  }
+}
