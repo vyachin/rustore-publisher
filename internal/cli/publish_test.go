@@ -1,0 +1,374 @@
+package cli_test
+
+import (
+	"encoding/json"
+	"fmt"
+	"io"
+	"net/http"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+)
+
+// publishStore — подменный RuStore для сценариев publish.
+type publishStore struct {
+	t *testing.T
+
+	active       map[string]any
+	versions     []map[string]any
+	created      map[string]any
+	versionID    int64
+	uploaded     bool
+	status       string
+	sendDate     *string
+	publishType  string
+	partialValue int
+	whatsNew     string
+	mismatch     bool
+
+	createCalls int
+	uploadCalls int
+	commitCalls int
+}
+
+func newPublishStore(t *testing.T, activeCode int64) *publishStore {
+	t.Helper()
+	active := map[string]any{
+		"versionId":     1,
+		"versionCode":   activeCode,
+		"versionStatus": "ACTIVE",
+		"publishType":   "MANUAL",
+		"testingType":   nil,
+		"partialValue":  100,
+	}
+	return &publishStore{
+		t:            t,
+		active:       active,
+		versions:     []map[string]any{active},
+		partialValue: 100,
+		publishType:  "MANUAL",
+	}
+}
+
+func (s *publishStore) addVersion(version map[string]any) {
+	s.versions = append(s.versions, version)
+}
+
+func (s *publishStore) handler(w http.ResponseWriter, r *http.Request) {
+	switch {
+	case r.URL.Path == "/public/auth/":
+		writeStoreJSON(w, http.StatusOK, `{"code":"OK","body":{"jwe":"token-1","ttl":900}}`)
+	case r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/aab"):
+		s.upload(w, r)
+	case r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/commit"):
+		s.commit(w, r)
+	case r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/version"):
+		s.create(w, r)
+	case r.Method == http.MethodGet && strings.Contains(r.URL.Path, "/public/v2/"):
+		s.detail(w)
+	case r.Method == http.MethodGet && strings.Contains(r.URL.Path, "/public/v1/"):
+		s.list(w)
+	default:
+		s.t.Errorf("неожиданный запрос %s %s", r.Method, r.URL.Path)
+		writeStoreJSON(w, http.StatusNotFound, `{"code":"error"}`)
+	}
+}
+
+func (s *publishStore) create(w http.ResponseWriter, r *http.Request) {
+	s.createCalls++
+	var request struct {
+		PublishType  string  `json:"publishType"`
+		PartialValue int     `json:"partialValue"`
+		WhatsNew     *string `json:"whatsNew"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+		s.t.Fatalf("create body: %v", err)
+	}
+	s.publishType = request.PublishType
+	s.partialValue = request.PartialValue
+	if request.WhatsNew != nil {
+		s.whatsNew = *request.WhatsNew
+	}
+	s.versionID = 100
+	s.status = "DRAFT"
+	s.created = map[string]any{
+		"versionId":     s.versionID,
+		"versionCode":   int64(42),
+		"versionStatus": "DRAFT",
+		"publishType":   request.PublishType,
+		"testingType":   nil,
+		"partialValue":  request.PartialValue,
+	}
+	s.versions = append(s.versions, s.created)
+	writeStoreJSON(w, http.StatusOK, fmt.Sprintf(`{"code":"OK","body":%d}`, s.versionID))
+}
+
+func (s *publishStore) upload(w http.ResponseWriter, r *http.Request) {
+	s.uploadCalls++
+	reader, err := r.MultipartReader()
+	if err != nil {
+		s.t.Fatalf("multipart: %v", err)
+	}
+	part, err := reader.NextPart()
+	if err != nil {
+		s.t.Fatalf("part: %v", err)
+	}
+	if part.FormName() != "file" {
+		s.t.Errorf("field = %q", part.FormName())
+	}
+	if _, err := io.Copy(io.Discard, part); err != nil {
+		s.t.Fatalf("read file: %v", err)
+	}
+	s.uploaded = true
+	writeStoreJSON(w, http.StatusOK, `{"code":"OK","body":{
+		"permissions":{"camera":[{"permission":"android.permission.CAMERA"}]},
+		"autoDetectedSdks":{"ads":["com.example.ads"]}}}`)
+}
+
+func (s *publishStore) commit(w http.ResponseWriter, r *http.Request) {
+	s.commitCalls++
+	if got := r.URL.Query().Get("priorityUpdate"); got != "0" {
+		s.t.Errorf("priorityUpdate = %q", got)
+	}
+	s.status = "TAKEN_FOR_MODERATION"
+	date := "2026-11-09T18:05:00Z"
+	s.sendDate = &date
+	s.created["versionStatus"] = s.status
+	s.created["sendDateForModer"] = date
+	writeStoreJSON(w, http.StatusOK, `{"code":"OK","message":null}`)
+}
+
+func (s *publishStore) detail(w http.ResponseWriter) {
+	if s.created == nil {
+		writeStoreJSON(w, http.StatusNotFound, `{"code":"error","message":"not found"}`)
+		return
+	}
+	publishType := s.publishType
+	partialValue := s.partialValue
+	if s.mismatch {
+		publishType = "INSTANTLY"
+		partialValue = 5
+	}
+	packages := `[]`
+	if s.uploaded {
+		packages = `[{"verCode":42,"isMainApk":true,"servicesType":"Unknown"}]`
+	}
+	writeStoreJSON(w, http.StatusOK, fmt.Sprintf(`{"code":"OK","body":{
+		"versionId":%d,"versionStatus":"%s","publishType":"%s",
+		"partialValue":%d,"whatsNew":%q,"statusComment":null,
+		"permissions":null,"packages":%s}}`,
+		s.versionID, s.status, publishType, partialValue, s.whatsNew, packages))
+}
+
+func (s *publishStore) list(w http.ResponseWriter) {
+	items := make([]string, 0, len(s.versions))
+	for _, version := range s.versions {
+		data, err := json.Marshal(version)
+		if err != nil {
+			s.t.Fatalf("marshal version: %v", err)
+		}
+		items = append(items, string(data))
+	}
+	writeStoreJSON(w, http.StatusOK, statusListBody(items...))
+}
+
+func writeChangelog(t *testing.T, versionCode int64, text string) (string, string) {
+	t.Helper()
+	root := t.TempDir()
+	dir := filepath.Join(root, "ru-RU", "changelogs")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	file := filepath.Join(dir, fmt.Sprintf("%d.txt", versionCode))
+	if err := os.WriteFile(file, []byte(text), 0o644); err != nil {
+		t.Fatalf("write changelog: %v", err)
+	}
+	return root, text
+}
+
+func TestPublishHappyPath(t *testing.T) {
+	t.Parallel()
+
+	store := newPublishStore(t, 10)
+	metadata, text := writeChangelog(t, 42, "Заметки о выпуске")
+	aab := writeAAB(t, "com.example.app", 42)
+
+	code, stdout, stderr := runAPI(t, store.handler, "--json", "publish",
+		"-f", aab, "--metadata-dir", metadata)
+	if code != 0 {
+		t.Fatalf("code = %d, stderr = %q", code, stderr)
+	}
+
+	obj := decodeOne(t, stdout)
+	assertKeysMatchSchema(t, "result", obj)
+
+	if obj["outcome"] != "submitted" || obj["phase"] != "status" {
+		t.Errorf("result = %v", obj)
+	}
+	if obj["version_id"] != float64(100) {
+		t.Errorf("version_id = %v", obj["version_id"])
+	}
+	if obj["version_status"] != "TAKEN_FOR_MODERATION" {
+		t.Errorf("version_status = %v", obj["version_status"])
+	}
+	if obj["submitted"] != true || obj["skipped"] != false {
+		t.Errorf("факты = %v", obj)
+	}
+	if _, ok := obj["permissions"].(map[string]any); !ok {
+		t.Errorf("permissions = %v", obj["permissions"])
+	}
+	if _, ok := obj["auto_detected_sdks"].(map[string]any); !ok {
+		t.Errorf("auto_detected_sdks = %v", obj["auto_detected_sdks"])
+	}
+
+	if store.createCalls != 1 || store.uploadCalls != 1 || store.commitCalls != 1 {
+		t.Errorf("вызовы: create=%d upload=%d commit=%d",
+			store.createCalls, store.uploadCalls, store.commitCalls)
+	}
+	if store.publishType != "MANUAL" || store.partialValue != 100 {
+		t.Errorf("настройки черновика: %s %d", store.publishType, store.partialValue)
+	}
+	if store.whatsNew != text {
+		t.Errorf("whatsNew = %q", store.whatsNew)
+	}
+}
+
+func TestPublishSkipExisting(t *testing.T) {
+	t.Parallel()
+
+	date := "2026-01-01T00:00:00Z"
+	store := newPublishStore(t, 42)
+	store.versions[0]["versionCode"] = int64(42)
+	store.versions[0]["sendDateForModer"] = date
+	store.versions[0]["versionStatus"] = "ACTIVE"
+	aab := writeAAB(t, "com.example.app", 42)
+
+	code, stdout, stderr := runAPI(t, store.handler, "--json", "publish",
+		"-f", aab, "--if-exists=skip")
+	if code != 0 {
+		t.Fatalf("code = %d, stderr = %q", code, stderr)
+	}
+	obj := decodeOne(t, stdout)
+	if obj["outcome"] != "skipped" || obj["skipped"] != true {
+		t.Errorf("result = %v", obj)
+	}
+	if store.createCalls != 0 || store.uploadCalls != 0 || store.commitCalls != 0 {
+		t.Errorf("записи при skip: %d/%d/%d",
+			store.createCalls, store.uploadCalls, store.commitCalls)
+	}
+}
+
+func TestPublishFailsOnExistingVersion(t *testing.T) {
+	t.Parallel()
+
+	date := "2026-01-01T00:00:00Z"
+	store := newPublishStore(t, 42)
+	store.versions[0]["sendDateForModer"] = date
+	aab := writeAAB(t, "com.example.app", 42)
+
+	code, stdout, _ := runAPI(t, store.handler, "--json", "publish", "-f", aab)
+	if code != 5 {
+		t.Fatalf("code = %d, want 5", code)
+	}
+	obj := decodeOne(t, stdout)
+	errObj, _ := obj["error"].(map[string]any)
+	if errObj["code"] != "VERSION_EXISTS" {
+		t.Errorf("error = %v", obj["error"])
+	}
+	if store.createCalls != 0 {
+		t.Errorf("create вызван %d раз", store.createCalls)
+	}
+}
+
+func TestPublishExistingDraft(t *testing.T) {
+	t.Parallel()
+
+	store := newPublishStore(t, 10)
+	store.addVersion(map[string]any{
+		"versionId": 2, "versionCode": 41, "versionStatus": "DRAFT", "testingType": nil,
+	})
+	aab := writeAAB(t, "com.example.app", 42)
+
+	code, stdout, _ := runAPI(t, store.handler, "--json", "publish", "-f", aab)
+	if code != 5 {
+		t.Fatalf("code = %d, want 5", code)
+	}
+	obj := decodeOne(t, stdout)
+	errObj, _ := obj["error"].(map[string]any)
+	if errObj["code"] != "EXISTING_DRAFT" {
+		t.Errorf("error = %v", obj["error"])
+	}
+	if store.createCalls != 0 {
+		t.Errorf("create вызван %d раз", store.createCalls)
+	}
+}
+
+func TestPublishDryRun(t *testing.T) {
+	t.Parallel()
+
+	store := newPublishStore(t, 10)
+	aab := writeAAB(t, "com.example.app", 42)
+
+	code, stdout, stderr := runAPI(t, store.handler, "--json", "publish",
+		"-f", aab, "--dry-run", "--metadata-dir", mustMetadata(t, 42))
+	if code != 0 {
+		t.Fatalf("code = %d, stderr = %q", code, stderr)
+	}
+	obj := decodeOne(t, stdout)
+	if obj["outcome"] != "dry_run" {
+		t.Errorf("outcome = %v", obj["outcome"])
+	}
+	if store.createCalls != 0 || store.uploadCalls != 0 || store.commitCalls != 0 {
+		t.Errorf("dry-run изменил магазин")
+	}
+}
+
+func TestPublishSettingsMismatch(t *testing.T) {
+	t.Parallel()
+
+	store := newPublishStore(t, 10)
+	store.mismatch = true
+	aab := writeAAB(t, "com.example.app", 42)
+
+	code, stdout, _ := runAPI(t, store.handler, "--json", "publish", "-f", aab)
+	if code != 5 {
+		t.Fatalf("code = %d, want 5", code)
+	}
+	obj := decodeOne(t, stdout)
+	errObj, _ := obj["error"].(map[string]any)
+	if errObj["code"] != "REMOTE_STATE_MISMATCH" {
+		t.Errorf("error = %v", obj["error"])
+	}
+	if store.uploadCalls != 0 {
+		t.Errorf("загрузка началась при несовпадении настроек")
+	}
+}
+
+func TestPublishInstantlyRequiresYes(t *testing.T) {
+	t.Parallel()
+
+	store := newPublishStore(t, 10)
+	aab := writeAAB(t, "com.example.app", 42)
+
+	code, stdout, _ := runAPI(t, store.handler, "--json", "publish",
+		"-f", aab, "--publish-type", "instantly")
+	if code != 2 {
+		t.Fatalf("code = %d, want 2", code)
+	}
+	obj := decodeOne(t, stdout)
+	errObj, _ := obj["error"].(map[string]any)
+	if errObj["code"] != "INVALID_ARGUMENTS" {
+		t.Errorf("error = %v", obj["error"])
+	}
+	if store.createCalls != 0 {
+		t.Errorf("create вызван без --yes")
+	}
+}
+
+// mustMetadata создаёт каталог с changelog для теста.
+func mustMetadata(t *testing.T, versionCode int64) string {
+	t.Helper()
+	root, _ := writeChangelog(t, versionCode, "Изменения")
+	return root
+}

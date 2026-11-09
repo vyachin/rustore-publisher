@@ -144,6 +144,7 @@ func newRootCmd(app *App) (*cobra.Command, *globalFlags) {
 		"путь к файлу учётных данных (или RUSTORE_CREDENTIALS_FILE)")
 
 	root.AddCommand(
+		newPublishCmd(app, g),
 		newDoctorCmd(app, g),
 		newStatusCmd(app, g),
 		newVersionCmd(app, g),

@@ -118,7 +118,7 @@ func TestCompletionUnknownShell(t *testing.T) {
 func TestUnknownCommandIsUsageError(t *testing.T) {
 	t.Parallel()
 
-	code, stdout, stderr := run(t, "--json", "publish")
+	code, stdout, stderr := run(t, "--json", "frobnicate")
 	if code != 2 {
 		t.Fatalf("code = %d, want 2", code)
 	}
