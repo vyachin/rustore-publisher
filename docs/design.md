@@ -133,6 +133,19 @@ docs/               Контракт CLI, настройка, архитекту
   отсутствие поля явным null.
 - `appType` в списке — `MAIN` или `GAME`, в подробностях — `MAIN` или `GAMES`;
   оба значения игр читаются как игры.
+- `POST /public/v1/application/{package}/version` создаёт черновик и принимает
+  `publishType` (`MANUAL`, `INSTANTLY`, `DELAYED`; по умолчанию API берёт
+  `INSTANTLY`), `partialValue` и `whatsNew`; остальные поля наследуются от
+  активной версии. Пример ответа содержит `body` с числом `versionId`, хотя
+  таблица полей описывает объект `content`, поэтому CLI принимает обе формы.
+  Создание нового черновика через API удаляет предыдущий.
+- `POST /public/v1/application/{package}/version/{versionId}/aab` загружает AAB
+  multipart-полем `file` и возвращает найденные `permissions` и
+  `autoDetectedSdks`.
+- `POST /public/v1/application/{package}/version/{versionId}/commit?priorityUpdate=0`
+  отправляет черновик на модерацию. Известные сообщения об ошибке:
+  `Packages for version with id = ... Is not found`, `Version must have at least
+  one main non-HMS apk-file`, `Version must have not only HMS apk-file`.
 
 ## Предлагаемый контракт команд версии 0.0.1
 

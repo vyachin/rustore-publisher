@@ -106,7 +106,7 @@ func (c *Client) do(ctx context.Context, method, path string, query map[string]s
 			continue
 		}
 
-		if attempt == c.cfg.MaxAttempts || !retryable(status, err) {
+		if attempt == c.cfg.MaxAttempts || !retryable(status, err) || !safeToRetry(op) {
 			break
 		}
 		if sleepErr := c.cfg.Sleep(ctx, c.backoff(attempt, retryAfter)); sleepErr != nil {
@@ -136,6 +136,12 @@ func (c *Client) do(ctx context.Context, method, path string, query map[string]s
 		exitcode.Wrap(exitcode.KindAPIUnavailable, lastErr),
 		"повторите команду позже или проверьте доступность API RuStore",
 	)
+}
+
+// safeToRetry сообщает, можно ли повторять операцию автоматически.
+// Запись (создание, загрузка, commit) не повторяется вслепую.
+func safeToRetry(op operation) bool {
+	return op == opListVersions || op == opVersionDetail
 }
 
 // bodyReader возвращает тело запроса или nil для пустого тела.

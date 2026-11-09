@@ -210,3 +210,23 @@ type envelope struct {
 	Body      json.RawMessage `json:"body"`
 	Timestamp string          `json:"timestamp"`
 }
+
+// CreateDraftRequest — тело создания черновика. Остальные поля карточки
+// RuStore берёт из активной версии.
+type CreateDraftRequest struct {
+	PublishType  string  `json:"publishType"`
+	PartialValue int     `json:"partialValue"`
+	WhatsNew     *string `json:"whatsNew,omitempty"`
+}
+
+// UploadResult — найденные в AAB разрешения и SDK.
+type UploadResult struct {
+	Permissions      json.RawMessage
+	AutoDetectedSDKs json.RawMessage
+}
+
+// uploadBody — тело ответа загрузки AAB.
+type uploadBody struct {
+	Permissions      json.RawMessage `json:"permissions"`
+	AutoDetectedSDKs json.RawMessage `json:"autoDetectedSdks"`
+}

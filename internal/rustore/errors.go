@@ -31,6 +31,9 @@ const (
 	opAuth operation = iota
 	opListVersions
 	opVersionDetail
+	opCreate
+	opUpload
+	opCommit
 )
 
 // classifyAPIError переводит ответ API в категорию ошибки CLI.
@@ -45,14 +48,24 @@ func classifyAPIError(op operation, apiErr *APIError) error {
 	case apiErr.Status == 403:
 		kind = exitcode.KindAccessDenied
 		hint = "проверьте, что ключ API выдан для этого приложения и нужных методов"
-	case apiErr.Status == 404 && op == opVersionDetail:
+	case apiErr.Status == 404 && (op == opVersionDetail || op == opUpload || op == opCommit):
 		kind = exitcode.KindVersionNotFound
 		hint = "проверьте идентификатор версии"
+	case apiErr.Status == 404 && op == opCreate:
+		kind = exitcode.KindApplicationNotFound
+		hint = "проверьте имя пакета и права ключа API"
 	case apiErr.Status == 404:
 		// Права и отсутствие приложения различаются не всегда, поэтому
 		// не выдаём 404 за подтверждённое отсутствие.
 		kind = exitcode.KindAccessDenied
 		hint = "проверьте имя пакета и права ключа; отсутствие приложения не подтверждено"
+	case apiErr.Status == 409 && op == opCreate:
+		kind = exitcode.KindExistingDraft
+		hint = "завершите или удалите существующий черновик в консоли RuStore"
+	case (op == opCreate || op == opUpload || op == opCommit) && apiErr.Status >= 500:
+		// Ответ 5xx на запись не доказывает, что изменение не применилось.
+		kind = exitcode.KindOutcomeUnknown
+		hint = "проверьте состояние версии командой status и в консоли RuStore"
 	case apiErr.Status == 400 || apiErr.Status == 422:
 		if op == opListVersions || op == opVersionDetail {
 			kind = exitcode.KindInvalidArguments
