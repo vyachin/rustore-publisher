@@ -150,12 +150,3 @@ type renderedError struct {
 func (e *renderedError) Error() string { return e.err.Error() }
 
 func (e *renderedError) Unwrap() error { return e.err }
-
-// writeRenderedError используется командами, которые сами печатают JSON
-// с накопленными фактами.
-func writeRenderedError(w io.Writer, result any, err error) error {
-	if writeErr := EncodeJSON(w, result); writeErr != nil {
-		return writeErr
-	}
-	return &renderedError{err: err}
-}
