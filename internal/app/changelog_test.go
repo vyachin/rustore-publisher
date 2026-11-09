@@ -197,3 +197,37 @@ func TestReadChangelogMissingDirectory(t *testing.T) {
 		t.Errorf("KindOf = %q", kind)
 	}
 }
+
+func TestReadChangelogAllowsContactsFile(t *testing.T) {
+	t.Parallel()
+
+	root := writeMetadata(t, map[string]string{
+		"developer-contacts.json": `{"email":"dev@example.com"}`,
+		"ru-RU/changelogs/42.txt": "Изменения",
+	})
+
+	text, err := app.ReadChangelog(root, 42)
+	if err != nil {
+		t.Fatalf("ReadChangelog: %v", err)
+	}
+	if text != "Изменения" {
+		t.Errorf("text = %q", text)
+	}
+}
+
+func TestReadChangelogRejectsUnknownMetadataFile(t *testing.T) {
+	t.Parallel()
+
+	root := writeMetadata(t, map[string]string{
+		"notes.txt":               "посторонний",
+		"ru-RU/changelogs/42.txt": "Изменения",
+	})
+
+	_, err := app.ReadChangelog(root, 42)
+	if err == nil {
+		t.Fatal("ожидалась ошибка")
+	}
+	if !strings.Contains(err.Error(), "notes.txt") {
+		t.Errorf("err = %q", err)
+	}
+}

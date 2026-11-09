@@ -11,7 +11,8 @@
 - Потоковая загрузка AAB, ожидание обработки и отправка на модерацию
   с `priorityUpdate=0`.
 - Режимы публикации `manual` и `instantly`, `--dry-run`, `--if-exists=fail|skip`.
-- Список изменений `metadata/ru-RU/changelogs/<код версии>.txt`.
+- Список изменений `metadata/ru-RU/changelogs/<код версии>.txt` и контакты
+  разработчика `metadata/developer-contacts.json` или `--contacts-file`.
 - Машинный JSON-результат с закрытыми перечислениями, коды завершения 0–8 и 130.
 - Составные действия `setup` и публикации, архивы GoReleaser для Linux, macOS
   и Windows на amd64 и arm64.

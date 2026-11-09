@@ -20,7 +20,10 @@ inputs:
     description: Весь JSON учётных данных в Base64; взаимоисключающий с credentials-file
     required: false
   metadata-dir:
-    description: Каталог metadata с файлом ru-RU/changelogs/<код версии>.txt
+    description: Каталог metadata с changelog и необязательным developer-contacts.json
+    required: false
+  contacts-file:
+    description: Файл контактов разработчика; по умолчанию metadata/developer-contacts.json
     required: false
   version-code:
     description: Ожидаемый код версии; проверяется по AAB
@@ -110,6 +113,7 @@ runs:
         RUSTORE_API_URL: ${{ inputs['api-url'] }}
         RUSTORE_AAB: ${{ inputs.aab }}
         RUSTORE_METADATA_DIR: ${{ inputs['metadata-dir'] }}
+        RUSTORE_CONTACTS_FILE: ${{ inputs['contacts-file'] }}
         RUSTORE_VERSION_CODE: ${{ inputs['version-code'] }}
         RUSTORE_PUBLISH_TYPE: ${{ inputs['publish-type'] }}
         RUSTORE_IF_EXISTS: ${{ inputs['if-exists'] }}

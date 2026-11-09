@@ -32,6 +32,7 @@ type PublishInput struct {
 	Package           string
 	Bundle            *artifact.Bundle
 	Changelog         *string
+	Contacts          *rustore.DeveloperContacts
 	PublishType       string
 	IfExists          string
 	DryRun            bool
@@ -151,9 +152,10 @@ func Publish(ctx context.Context, client *rustore.Client, in PublishInput, progr
 		progress.Phase = PhaseCreate
 	}
 	versionID, err := client.CreateDraft(ctx, in.Package, rustore.CreateDraftRequest{
-		PublishType:  in.PublishType,
-		PartialValue: 100,
-		WhatsNew:     in.Changelog,
+		PublishType:       in.PublishType,
+		PartialValue:      100,
+		WhatsNew:          in.Changelog,
+		DeveloperContacts: in.Contacts,
 	})
 	if err != nil {
 		markUnknown(&report, err)

@@ -62,12 +62,28 @@ rustore-publisher status -p com.example.app
 Источники и отпечатки — в
 [internal/rustore/certs/README.md](internal/rustore/certs/README.md).
 
-## Список изменений
+## Метаданные
 
-Файл `metadata/ru-RU/changelogs/<versionCode>.txt` в UTF-8, до 5000 символов.
-Без `--metadata-dir` поле `whatsNew` не передаётся, а CLI предупреждает, что
-пользователи увидят прежние заметки активной версии. Другие локали и файлы
-карточки в 0.0.1 отклоняются.
+Список изменений — `metadata/ru-RU/changelogs/<versionCode>.txt` в UTF-8,
+до 5000 символов. Без `--metadata-dir` поле `whatsNew` не передаётся, а CLI
+предупреждает, что пользователи увидят прежние заметки активной версии. Другие
+локали и файлы карточки в 0.0.1 отклоняются.
+
+Контакты разработчика можно передать файлом `metadata/developer-contacts.json`
+или явно через `--contacts-file`:
+
+```json
+{
+  "email": "dev@example.com",
+  "website": "https://example.com",
+  "vkCommunity": "https://vk.com/example",
+  "maxMessenger": "https://max.ru/example"
+}
+```
+
+Достаточно одного поля; неизвестные поля и некорректные email/адреса
+отклоняются до обращения к API. Без файла контакты наследуются из активной
+версии, как и остальные поля карточки.
 
 ## Режим публикации
 

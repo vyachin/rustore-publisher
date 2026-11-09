@@ -26,8 +26,7 @@ func ReadChangelog(metadataDir string, versionCode int64) (string, error) {
 			"код версии должен быть положительным, получен %d", versionCode)
 	}
 
-	localeDir, err := onlyEntry(metadataDir, changelogLocale,
-		"поддерживается только локаль ru-RU")
+	localeDir, err := metadataLocaleDir(metadataDir)
 	if err != nil {
 		return "", err
 	}
@@ -87,6 +86,46 @@ func ReadChangelog(metadataDir string, versionCode int64) (string, error) {
 func normalizeNewlines(text string) string {
 	text = strings.ReplaceAll(text, "\r\n", "\n")
 	return strings.ReplaceAll(text, "\r", "\n")
+}
+
+// metadataLocaleDir находит каталог ru-RU в метаданных, разрешая рядом
+// необязательный файл контактов разработчика.
+func metadataLocaleDir(metadataDir string) (string, error) {
+	entries, err := os.ReadDir(metadataDir)
+	if err != nil {
+		return "", exitcode.WithHint(
+			exitcode.Wrap(exitcode.KindInvalidChangelog,
+				fmt.Errorf("прочитать каталог метаданных %q: %w", metadataDir, err)),
+			"проверьте путь в --metadata-dir",
+		)
+	}
+
+	found := ""
+	for _, entry := range entries {
+		if strings.HasPrefix(entry.Name(), ".") {
+			continue
+		}
+		if entry.IsDir() && entry.Name() == changelogLocale {
+			found = filepath.Join(metadataDir, entry.Name())
+			continue
+		}
+		if !entry.IsDir() && entry.Name() == ContactsFileName {
+			continue
+		}
+		return "", exitcode.WithHint(
+			exitcode.Errorf(exitcode.KindInvalidChangelog,
+				"в каталоге %q найден элемент %q", metadataDir, entry.Name()),
+			"поддерживаются локаль ru-RU и файл "+ContactsFileName,
+		)
+	}
+	if found == "" {
+		return "", exitcode.WithHint(
+			exitcode.Errorf(exitcode.KindInvalidChangelog,
+				"в каталоге %q нет %q", metadataDir, changelogLocale),
+			"добавьте каталог "+changelogLocale+" с changelogs",
+		)
+	}
+	return found, nil
 }
 
 // onlyEntry проверяет, что в каталоге есть ровно нужный подкаталог,

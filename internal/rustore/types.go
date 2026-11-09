@@ -216,12 +216,22 @@ type envelope struct {
 	Timestamp string          `json:"timestamp"`
 }
 
+// DeveloperContacts — контакты разработчика для карточки приложения.
+// Достаточно одного заполненного способа связи.
+type DeveloperContacts struct {
+	Email        string `json:"email,omitempty"`
+	Website      string `json:"website,omitempty"`
+	VKCommunity  string `json:"vkCommunity,omitempty"`
+	MaxMessenger string `json:"maxMessenger,omitempty"`
+}
+
 // CreateDraftRequest — тело создания черновика. Остальные поля карточки
 // RuStore берёт из активной версии.
 type CreateDraftRequest struct {
-	PublishType  string  `json:"publishType"`
-	PartialValue int     `json:"partialValue"`
-	WhatsNew     *string `json:"whatsNew,omitempty"`
+	PublishType       string             `json:"publishType"`
+	PartialValue      int                `json:"partialValue"`
+	WhatsNew          *string            `json:"whatsNew,omitempty"`
+	DeveloperContacts *DeveloperContacts `json:"developerContacts,omitempty"`
 }
 
 // UploadResult — найденные в AAB разрешения и SDK.

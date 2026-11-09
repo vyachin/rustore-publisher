@@ -34,6 +34,7 @@ EOF
 chmod 0755 "${work}/rustore-publisher"
 printf 'aab' >"${work}/app.aab"
 printf '{"keyId":"key-1","privateKey":"secret"}' >"${work}/creds.json"
+printf '{"email":"dev@example.com"}' >"${work}/contacts.json"
 
 result_file="${work}/result.json"
 args_file="${work}/args.txt"
@@ -68,6 +69,7 @@ run_publish() {
 		RUSTORE_API_URL=https://api.example.test \
 		RUSTORE_CREDENTIALS_FILE="${work}/creds.json" \
 		RUSTORE_METADATA_DIR=metadata \
+		RUSTORE_CONTACTS_FILE="${work}/contacts.json" \
 		RUSTORE_VERSION_CODE=42 \
 		RUSTORE_TIMEOUT=30m \
 		RUSTORE_REQUEST_TIMEOUT=2m \
@@ -100,6 +102,7 @@ grep -q 'Нет списка изменений' "${work}/summary" || { printf '
 check grep -q -- '--dry-run' "$args_file"
 check grep -q -- '--yes' "$args_file"
 check grep -q -- '--metadata-dir' "$args_file"
+check grep -q -- '--contacts-file' "$args_file"
 check grep -q -- '--version-code' "$args_file"
 check grep -q -- '--api-url' "$args_file"
 check grep -q '^https://api.example.test$' "$args_file"

@@ -15,17 +15,18 @@ import (
 type publishStore struct {
 	t *testing.T
 
-	active       map[string]any
-	versions     []map[string]any
-	created      map[string]any
-	versionID    int64
-	uploaded     bool
-	status       string
-	sendDate     *string
-	publishType  string
-	partialValue int
-	whatsNew     string
-	mismatch     bool
+	active        map[string]any
+	versions      []map[string]any
+	created       map[string]any
+	versionID     int64
+	uploaded      bool
+	status        string
+	sendDate      *string
+	publishType   string
+	partialValue  int
+	whatsNew      string
+	contactsEmail string
+	mismatch      bool
 
 	createCalls int
 	uploadCalls int
@@ -78,9 +79,12 @@ func (s *publishStore) handler(w http.ResponseWriter, r *http.Request) {
 func (s *publishStore) create(w http.ResponseWriter, r *http.Request) {
 	s.createCalls++
 	var request struct {
-		PublishType  string  `json:"publishType"`
-		PartialValue int     `json:"partialValue"`
-		WhatsNew     *string `json:"whatsNew"`
+		PublishType       string  `json:"publishType"`
+		PartialValue      int     `json:"partialValue"`
+		WhatsNew          *string `json:"whatsNew"`
+		DeveloperContacts *struct {
+			Email string `json:"email"`
+		} `json:"developerContacts"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
 		s.t.Fatalf("create body: %v", err)
@@ -89,6 +93,9 @@ func (s *publishStore) create(w http.ResponseWriter, r *http.Request) {
 	s.partialValue = request.PartialValue
 	if request.WhatsNew != nil {
 		s.whatsNew = *request.WhatsNew
+	}
+	if request.DeveloperContacts != nil {
+		s.contactsEmail = request.DeveloperContacts.Email
 	}
 	s.versionID = 100
 	s.status = "DRAFT"
@@ -371,4 +378,70 @@ func mustMetadata(t *testing.T, versionCode int64) string {
 	t.Helper()
 	root, _ := writeChangelog(t, versionCode, "Изменения")
 	return root
+}
+
+func TestPublishSendsDeveloperContacts(t *testing.T) {
+	t.Parallel()
+
+	store := newPublishStore(t, 10)
+	metadata, _ := writeChangelog(t, 42, "Заметки")
+	contacts := filepath.Join(metadata, "developer-contacts.json")
+	if err := os.WriteFile(contacts, []byte(`{"email":"dev@example.com","website":"https://example.com"}`), 0o600); err != nil {
+		t.Fatalf("write contacts: %v", err)
+	}
+	aab := writeAAB(t, "com.example.app", 42)
+
+	code, _, stderr := runAPI(t, store.handler, "publish",
+		"-f", aab, "--metadata-dir", metadata)
+	if code != 0 {
+		t.Fatalf("code = %d, stderr = %q", code, stderr)
+	}
+	if store.contactsEmail != "dev@example.com" {
+		t.Errorf("developerContacts.email = %q", store.contactsEmail)
+	}
+}
+
+func TestPublishExplicitContactsFile(t *testing.T) {
+	t.Parallel()
+
+	store := newPublishStore(t, 10)
+	aab := writeAAB(t, "com.example.app", 42)
+	contacts := filepath.Join(t.TempDir(), "contacts.json")
+	if err := os.WriteFile(contacts, []byte(`{"website":"https://example.com"}`), 0o600); err != nil {
+		t.Fatalf("write contacts: %v", err)
+	}
+
+	code, _, stderr := runAPI(t, store.handler, "publish",
+		"-f", aab, "--contacts-file", contacts)
+	if code != 0 {
+		t.Fatalf("code = %d, stderr = %q", code, stderr)
+	}
+	if store.createCalls != 1 {
+		t.Errorf("createCalls = %d", store.createCalls)
+	}
+}
+
+func TestPublishInvalidContactsStopsBeforeNetwork(t *testing.T) {
+	t.Parallel()
+
+	store := newPublishStore(t, 10)
+	aab := writeAAB(t, "com.example.app", 42)
+	contacts := filepath.Join(t.TempDir(), "contacts.json")
+	if err := os.WriteFile(contacts, []byte(`{"email":"bad"}`), 0o600); err != nil {
+		t.Fatalf("write contacts: %v", err)
+	}
+
+	code, stdout, _ := runAPI(t, store.handler, "--json", "publish",
+		"-f", aab, "--contacts-file", contacts)
+	if code != 2 {
+		t.Fatalf("code = %d, want 2", code)
+	}
+	obj := decodeOne(t, stdout)
+	errObj, _ := obj["error"].(map[string]any)
+	if errObj["code"] != "INVALID_ARGUMENTS" {
+		t.Errorf("error = %v", obj["error"])
+	}
+	if store.createCalls != 0 || store.uploadCalls != 0 {
+		t.Errorf("сеть вызвана до проверки контактов")
+	}
 }

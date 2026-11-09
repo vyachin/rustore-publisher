@@ -29,6 +29,7 @@ aab="${RUSTORE_AAB:-}"
 publish_type="${RUSTORE_PUBLISH_TYPE:-manual}"
 if_exists="${RUSTORE_IF_EXISTS:-fail}"
 metadata_dir="${RUSTORE_METADATA_DIR:-}"
+contacts_file="${RUSTORE_CONTACTS_FILE:-}"
 api_url="${RUSTORE_API_URL:-}"
 version_code="${RUSTORE_VERSION_CODE:-}"
 timeout_value="${RUSTORE_TIMEOUT:-}"
@@ -114,6 +115,9 @@ if [ -n "$api_url" ]; then
 fi
 if [ -n "$metadata_dir" ]; then
 	args+=(--metadata-dir "$(resolve_path "$metadata_dir")")
+fi
+if [ -n "$contacts_file" ]; then
+	args+=(--contacts-file "$(resolve_path "$contacts_file")")
 fi
 if [ -n "$version_code" ]; then
 	args+=(--version-code "$version_code")

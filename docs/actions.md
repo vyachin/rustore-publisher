@@ -53,6 +53,7 @@ jobs:
           aab: app/build/outputs/bundle/release/app-release.aab
           credentials-json-base64: ${{ secrets.RUSTORE_CREDENTIALS_BASE64 }}
           metadata-dir: metadata
+          # Контакты разработчика: metadata/developer-contacts.json
 ```
 
 Секрет `RUSTORE_CREDENTIALS_BASE64` — это Base64 от всего JSON-файла учётных
@@ -79,7 +80,8 @@ base64 -i rustore.json    # macOS, без переносов строк
 | `aab` | обязателен | Путь к подписанному AAB |
 | `credentials-json-base64` | — | Весь JSON учётных данных в Base64 |
 | `credentials-file` | — | Путь к файлу учётных данных |
-| `metadata-dir` | — | Каталог `metadata` со списком изменений |
+| `metadata-dir` | — | Каталог `metadata` со списком изменений и контактами |
+| `contacts-file` | `metadata/developer-contacts.json` | Файл контактов разработчика |
 | `version-code` | из AAB | Ожидаемый код версии |
 | `publish-type` | `manual` | `manual` или `instantly` |
 | `if-exists` | `fail` | `fail` или `skip` для уже отправленной версии |

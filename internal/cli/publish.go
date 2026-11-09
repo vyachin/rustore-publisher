@@ -2,6 +2,8 @@ package cli
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -10,6 +12,7 @@ import (
 	appcore "github.com/vyachin/rustore-publisher/internal/app"
 	"github.com/vyachin/rustore-publisher/internal/artifact"
 	"github.com/vyachin/rustore-publisher/internal/exitcode"
+	"github.com/vyachin/rustore-publisher/internal/rustore"
 )
 
 func newPublishCmd(a *App, g *globalFlags) *cobra.Command {
@@ -17,6 +20,7 @@ func newPublishCmd(a *App, g *globalFlags) *cobra.Command {
 		packageName       string
 		aabPath           string
 		metadataDir       string
+		contactsFile      string
 		versionCode       int64
 		publishType       string
 		ifExists          string
@@ -92,6 +96,11 @@ func newPublishCmd(a *App, g *globalFlags) *cobra.Command {
 				changelog = &text
 			}
 
+			contacts, err := readContacts(contactsFile, metadataDir)
+			if err != nil {
+				return failPublish(a, g, result, PhasePreflight, err, appcore.PublishReport{})
+			}
+
 			client, err := newRustoreClient(a, g)
 			if err != nil {
 				return failPublish(a, g, result, PhasePreflight, err, appcore.PublishReport{})
@@ -102,6 +111,7 @@ func newPublishCmd(a *App, g *globalFlags) *cobra.Command {
 				Package:           packageName,
 				Bundle:            bundle,
 				Changelog:         changelog,
+				Contacts:          contacts,
 				PublishType:       publishTypeValue,
 				IfExists:          ifExists,
 				DryRun:            dryRun,
@@ -135,6 +145,8 @@ func newPublishCmd(a *App, g *globalFlags) *cobra.Command {
 	flags.StringVarP(&packageName, "package", "p", "", "имя пакета приложения; проверяется по AAB")
 	flags.StringVarP(&aabPath, "aab", "f", "", "путь к AAB (обязательно)")
 	flags.StringVar(&metadataDir, "metadata-dir", "", "каталог metadata со списком изменений")
+	flags.StringVar(&contactsFile, "contacts-file", "",
+		"файл контактов разработчика; по умолчанию metadata/"+appcore.ContactsFileName)
 	flags.Int64Var(&versionCode, "version-code", 0, "ожидаемый код версии; проверяется по AAB")
 	flags.StringVar(&publishType, "publish-type", "manual", "режим публикации: manual или instantly")
 	flags.StringVar(&ifExists, "if-exists", "fail", "при уже отправленной версии: fail или skip")
@@ -144,6 +156,26 @@ func newPublishCmd(a *App, g *globalFlags) *cobra.Command {
 	flags.BoolVar(&yes, "yes", false, "подтвердить автоматическую публикацию instantly")
 
 	return cmd
+}
+
+// readContacts выбирает файл контактов: явный флаг важнее файла в метаданных.
+func readContacts(contactsFile, metadataDir string) (*rustore.DeveloperContacts, error) {
+	path := contactsFile
+	if path == "" && metadataDir != "" {
+		candidate := filepath.Join(metadataDir, appcore.ContactsFileName)
+		if _, err := os.Stat(candidate); err == nil {
+			path = candidate
+		}
+	}
+	if path == "" {
+		return nil, nil
+	}
+
+	contacts, err := appcore.ReadDeveloperContacts(path)
+	if err != nil {
+		return nil, err
+	}
+	return &contacts, nil
 }
 
 // normalizePublishType переводит режим CLI в значение API.
