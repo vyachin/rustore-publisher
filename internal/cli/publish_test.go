@@ -99,6 +99,10 @@ func (s *publishStore) create(w http.ResponseWriter, r *http.Request) {
 	}
 	s.versionID = 100
 	s.status = "DRAFT"
+	if s.mismatch {
+		request.PublishType = "INSTANTLY"
+		request.PartialValue = 5
+	}
 	s.created = map[string]any{
 		"versionId":     s.versionID,
 		"versionCode":   int64(42),
@@ -106,6 +110,9 @@ func (s *publishStore) create(w http.ResponseWriter, r *http.Request) {
 		"publishType":   request.PublishType,
 		"testingType":   nil,
 		"partialValue":  request.PartialValue,
+	}
+	if request.WhatsNew != nil {
+		s.created["whatsNew"] = *request.WhatsNew
 	}
 	s.versions = append(s.versions, s.created)
 	writeStoreJSON(w, http.StatusOK, fmt.Sprintf(`{"code":"OK","body":%d}`, s.versionID))
@@ -152,20 +159,15 @@ func (s *publishStore) detail(w http.ResponseWriter) {
 		return
 	}
 	publishType := s.publishType
-	partialValue := s.partialValue
-	if s.mismatch {
-		publishType = "INSTANTLY"
-		partialValue = 5
-	}
 	packages := `[]`
 	if s.uploaded {
 		packages = `[{"verCode":42,"isMainApk":true,"servicesType":"Unknown"}]`
 	}
 	writeStoreJSON(w, http.StatusOK, fmt.Sprintf(`{"code":"OK","body":{
 		"versionId":%d,"versionStatus":"%s","publishType":"%s",
-		"partialValue":%d,"whatsNew":%q,"statusComment":null,
+		"partialValue":-1,"whatsNew":%q,"statusComment":null,
 		"permissions":null,"packages":%s}}`,
-		s.versionID, s.status, publishType, partialValue, s.whatsNew, packages))
+		s.versionID, s.status, publishType, s.whatsNew, packages))
 }
 
 func (s *publishStore) list(w http.ResponseWriter) {

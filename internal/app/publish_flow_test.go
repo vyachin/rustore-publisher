@@ -100,7 +100,7 @@ func (s *flowStore) list(w http.ResponseWriter) {
 			date = fmt.Sprintf(`,"sendDateForModer":%q`, *s.sendDate)
 		}
 		list = append(list, json.RawMessage(fmt.Sprintf(
-			`{"versionId":%d,"versionCode":42,"versionStatus":%q,"publishType":"MANUAL","testingType":null%s}`,
+			`{"versionId":%d,"versionCode":42,"versionStatus":%q,"publishType":"MANUAL","testingType":null,"partialValue":100,"whatsNew":"Заметки"%s}`,
 			s.versionID, s.status, date)))
 	}
 	body, err := json.Marshal(list)

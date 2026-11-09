@@ -166,15 +166,25 @@ func Publish(ctx context.Context, client *rustore.Client, in PublishInput, progr
 	if progress != nil {
 		progress.Phase = PhaseCreate
 	}
+	versions, err = client.ListVersions(ctx, in.Package,
+		rustore.ListOptions{IDs: []int64{versionID}})
+	if err != nil {
+		return report, err
+	}
+	created := FindVersion(versions, versionID)
+	if created == nil {
+		return report, exitcode.Errorf(exitcode.KindAPIResponseInvalid,
+			"созданная версия %d не найдена в списке версий", versionID)
+	}
 	detail, err := client.VersionDetail(ctx, in.Package, versionID)
 	if err != nil {
 		return report, err
 	}
-	if err := verifyDraft(&detail, in.PublishType, in.Changelog); err != nil {
+	if err := verifyDraft(created, &detail, in.PublishType, in.Changelog); err != nil {
 		return report, err
 	}
 	report.Detail = &detail
-	report.Version = versionFromDetail(&detail)
+	report.Version = created
 
 	if progress != nil {
 		progress.Phase = PhaseUpload
@@ -369,34 +379,38 @@ func decideExisting(version *rustore.Version, ifExists string) error {
 }
 
 // verifyDraft сверяет сохранённые настройки созданного черновика.
-func verifyDraft(detail *rustore.VersionDetail, publishType string, whatsNew *string) error {
+func verifyDraft(version *rustore.Version, detail *rustore.VersionDetail,
+	publishType string, whatsNew *string,
+) error {
 	var differences []string
-	if !strings.EqualFold(detail.PublishType, publishType) {
+	if !strings.EqualFold(version.PublishType, publishType) {
 		differences = append(differences,
-			fmt.Sprintf("publishType: ожидался %s, сохранён %q", publishType, detail.PublishType))
+			fmt.Sprintf("publishType: ожидался %s, сохранён %q", publishType, version.PublishType))
 	}
-	if detail.PartialValue == nil || *detail.PartialValue != 100 {
+	// В подробностях v2 partialValue до загрузки равен -1; итоговые настройки
+	// подтверждает список версий, где для созданного черновика уже стоит 100.
+	if version.PartialValue == nil || *version.PartialValue != 100 {
 		differences = append(differences, "partialValue: ожидался 100")
 	}
 	if whatsNew != nil {
 		stored := ""
-		if detail.WhatsNew != nil {
-			stored = *detail.WhatsNew
+		if version.WhatsNew != nil {
+			stored = *version.WhatsNew
 		}
 		if stored != *whatsNew {
 			differences = append(differences, "whatsNew не совпадает с переданным")
 		}
 	}
-	if detail.Status != rustore.StatusDraft {
+	if version.Status != rustore.StatusDraft || detail.Status != rustore.StatusDraft {
 		differences = append(differences,
-			fmt.Sprintf("versionStatus: ожидался DRAFT, получен %q", detail.Status))
+			fmt.Sprintf("versionStatus: ожидался DRAFT, получены %q и %q", version.Status, detail.Status))
 	}
 	if len(differences) == 0 {
 		return nil
 	}
 	return exitcode.WithHint(
 		exitcode.Errorf(exitcode.KindRemoteStateMismatch,
-			"сервер сохранил черновик %d иначе: %s", detail.VersionID, strings.Join(differences, "; ")),
+			"сервер сохранил черновик %d иначе: %s", version.VersionID, strings.Join(differences, "; ")),
 		"не исправляйте настройки автоматически; проверьте черновик в консоли RuStore",
 	)
 }
@@ -542,20 +556,4 @@ func sleepContext(ctx context.Context, delay time.Duration) error {
 
 func sleep(ctx context.Context, in PublishInput, delay time.Duration) error {
 	return in.Sleep(ctx, delay)
-}
-
-// versionFromDetail собирает версию из подробностей для результата.
-func versionFromDetail(detail *rustore.VersionDetail) *rustore.Version {
-	if detail == nil {
-		return nil
-	}
-	return &rustore.Version{
-		VersionID:       detail.VersionID,
-		Status:          detail.Status,
-		PublishType:     detail.PublishType,
-		Testing:         detail.Testing,
-		PublishDateTime: detail.PublishDateTime,
-		PartialValue:    detail.PartialValue,
-		WhatsNew:        detail.WhatsNew,
-	}
 }
