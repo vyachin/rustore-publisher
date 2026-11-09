@@ -285,3 +285,18 @@ func assertKeysMatchSchema(t *testing.T, def string, obj map[string]any) {
 		}
 	}
 }
+
+func TestPublishHelpHasRussianDefaults(t *testing.T) {
+	t.Parallel()
+
+	code, stdout, stderr := run(t, "publish", "--help")
+	if code != 0 {
+		t.Fatalf("code = %d, stderr = %q", code, stderr)
+	}
+	if !strings.Contains(stdout, "бюджет ожидания обработки AAB, по умолчанию 2m") {
+		t.Errorf("help не содержит русское описание обработки")
+	}
+	if strings.Contains(stdout, "(default 2m0s)") {
+		t.Errorf("help содержит английское значение по умолчанию")
+	}
+}

@@ -42,6 +42,11 @@ func newPublishCmd(a *App, g *globalFlags) *cobra.Command {
 			if packageName != "" {
 				result.Package = &packageName
 			}
+			// Значение по умолчанию подставляется здесь, чтобы справка
+			// не показывала английское "(default 2m0s)".
+			if !cmd.Flags().Changed("processing-timeout") {
+				processingTimeout = 2 * time.Minute
+			}
 
 			publishTypeValue, err := normalizePublishType(publishType)
 			if err != nil {
@@ -141,7 +146,7 @@ func newPublishCmd(a *App, g *globalFlags) *cobra.Command {
 	flags.Int64Var(&versionCode, "version-code", 0, "ожидаемый код версии; проверяется по AAB")
 	flags.StringVar(&publishType, "publish-type", "manual", "режим публикации: manual или instantly")
 	flags.StringVar(&ifExists, "if-exists", "fail", "при уже отправленной версии: fail или skip")
-	flags.DurationVar(&processingTimeout, "processing-timeout", 2*time.Minute,
+	flags.DurationVar(&processingTimeout, "processing-timeout", 0,
 		"бюджет ожидания обработки AAB, по умолчанию 2m")
 	flags.BoolVar(&dryRun, "dry-run", false, "только проверить данные и состояние, без записи")
 
