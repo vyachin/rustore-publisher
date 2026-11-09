@@ -29,10 +29,9 @@ func newRustoreClient(a *App, g *globalFlags) (*rustore.Client, error) {
 			KeyID: credentials.KeyID,
 			Key:   credentials.Key,
 		},
-		RequestTimeout:    g.RequestTimeout,
-		Now:               a.Now,
-		Logger:            a.Logger,
-		DisableEmbeddedCA: embeddedCADisabled(g),
+		RequestTimeout: g.RequestTimeout,
+		Now:            a.Now,
+		Logger:         a.Logger,
 	})
 }
 
@@ -57,13 +56,4 @@ func resolveAPIBaseURL(a *App, g *globalFlags) (string, error) {
 			"--api-url должен быть HTTPS-адресом, получено %q", value)
 	}
 	return strings.TrimRight(value, "/"), nil
-}
-
-// embeddedCADisabled учитывает флаг и переменную окружения.
-func embeddedCADisabled(g *globalFlags) bool {
-	if g.NoEmbeddedCA {
-		return true
-	}
-	value := strings.ToLower(strings.TrimSpace(os.Getenv("RUSTORE_NO_EMBEDDED_CA")))
-	return value == "1" || value == "true" || value == "yes"
 }

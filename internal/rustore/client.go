@@ -42,9 +42,6 @@ type Config struct {
 	MaxAttempts    int
 	RetryBase      time.Duration
 	Logger         *slog.Logger
-	// DisableEmbeddedCA оставляет только системные корни и не доверяет
-	// встроенным сертификатам Минцифры.
-	DisableEmbeddedCA bool
 }
 
 // Client — небольшой клиент Public API RuStore.
@@ -64,7 +61,7 @@ func NewClient(cfg Config) (*Client, error) {
 		cfg.BaseURL = DefaultBaseURL
 	}
 	if cfg.HTTPClient == nil {
-		client, err := newHTTPClient(cfg.DisableEmbeddedCA)
+		client, err := newHTTPClient()
 		if err != nil {
 			return nil, err
 		}

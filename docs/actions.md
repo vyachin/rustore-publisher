@@ -67,8 +67,7 @@ base64 -i rustore.json    # macOS, без переносов строк
 
 Сертификаты Минцифры встроены в CLI, поэтому устанавливать CA на runner
 не нужно: домен `https://public-api-m.rustore.ru` работает сразу. Для старого
-домена передайте `api-url: https://public-api.rustore.ru`; чтобы не доверять
-встроенному CA, добавьте `no-embedded-ca: true`.
+домена передайте `api-url: https://public-api.rustore.ru`.
 
 ### Входы
 
@@ -77,7 +76,6 @@ base64 -i rustore.json    # macOS, без переносов строк
 | `version` | тег действия | Версия CLI |
 | `package` | из AAB | Имя пакета для проверки |
 | `api-url` | `https://public-api-m.rustore.ru` | Адрес Public API |
-| `no-embedded-ca` | `false` | Не доверять встроенным сертификатам Минцифры |
 | `aab` | обязателен | Путь к подписанному AAB |
 | `credentials-json-base64` | — | Весь JSON учётных данных в Base64 |
 | `credentials-file` | — | Путь к файлу учётных данных |

@@ -40,7 +40,7 @@ func TestEmbeddedMinistryCertificates(t *testing.T) {
 		t.Errorf("промежуточный сертификат не подписан корнем: %v", err)
 	}
 
-	pool, err := rootCAs(false)
+	pool, err := rootCAs()
 	if err != nil {
 		t.Fatalf("rootCAs: %v", err)
 	}
@@ -62,7 +62,7 @@ func TestHTTPClientRejectsRedirects(t *testing.T) {
 	server := httptest.NewServer(http.RedirectHandler(target.URL, http.StatusFound))
 	t.Cleanup(server.Close)
 
-	client, err := newHTTPClient(false)
+	client, err := newHTTPClient()
 	if err != nil {
 		t.Fatalf("newHTTPClient: %v", err)
 	}

@@ -21,40 +21,15 @@ import (
 var embeddedCerts embed.FS
 
 var (
-	embeddedOnce sync.Once
-	embeddedPool *x509.CertPool
-	embeddedErr  error
-
-	systemOnce sync.Once
-	systemPool *x509.CertPool
-	systemErr  error
+	rootCAsOnce sync.Once
+	rootCAsPool *x509.CertPool
+	rootCAsErr  error
 )
 
-// rootCAs возвращает пул доверия. По умолчанию это системные корни вместе
-// со встроенными сертификатами Минцифры; disable оставляет только системные.
-func rootCAs(disableEmbedded bool) (*x509.CertPool, error) {
-	if disableEmbedded {
-		return systemRootCAs()
-	}
-	return embeddedRootCAs()
-}
-
-// systemRootCAs возвращает только системные корни.
-func systemRootCAs() (*x509.CertPool, error) {
-	systemOnce.Do(func() {
-		pool, err := x509.SystemCertPool()
-		if err != nil || pool == nil {
-			systemErr = fmt.Errorf("получить системные корни: %w", err)
-			return
-		}
-		systemPool = pool
-	})
-	return systemPool, systemErr
-}
-
-// embeddedRootCAs добавляет официальные сертификаты Минцифры к системным.
-func embeddedRootCAs() (*x509.CertPool, error) {
-	embeddedOnce.Do(func() {
+// rootCAs возвращает системные корни вместе с официальными сертификатами
+// Минцифры. Пул используется только HTTP-клиентом RuStore.
+func rootCAs() (*x509.CertPool, error) {
+	rootCAsOnce.Do(func() {
 		pool, err := x509.SystemCertPool()
 		if err != nil || pool == nil {
 			pool = x509.NewCertPool()
@@ -62,7 +37,7 @@ func embeddedRootCAs() (*x509.CertPool, error) {
 
 		entries, err := embeddedCerts.ReadDir("certs")
 		if err != nil {
-			embeddedErr = fmt.Errorf("прочитать встроенные сертификаты: %w", err)
+			rootCAsErr = fmt.Errorf("прочитать встроенные сертификаты: %w", err)
 			return
 		}
 
@@ -73,29 +48,29 @@ func embeddedRootCAs() (*x509.CertPool, error) {
 			}
 			data, err := embeddedCerts.ReadFile("certs/" + entry.Name())
 			if err != nil {
-				embeddedErr = fmt.Errorf("прочитать %s: %w", entry.Name(), err)
+				rootCAsErr = fmt.Errorf("прочитать %s: %w", entry.Name(), err)
 				return
 			}
 			if !pool.AppendCertsFromPEM(data) {
-				embeddedErr = fmt.Errorf("сертификат %s не разобран", entry.Name())
+				rootCAsErr = fmt.Errorf("сертификат %s не разобран", entry.Name())
 				return
 			}
 			added++
 		}
 		if added == 0 {
-			embeddedErr = fmt.Errorf("встроенные сертификаты не найдены")
+			rootCAsErr = fmt.Errorf("встроенные сертификаты не найдены")
 			return
 		}
-		embeddedPool = pool
+		rootCAsPool = pool
 	})
-	return embeddedPool, embeddedErr
+	return rootCAsPool, rootCAsErr
 }
 
 // newHTTPClient создаёт HTTP-клиент RuStore с встроенными сертификатами.
 // Редиректы запрещены, чтобы доверие Минцифры не распространялось на другие
 // хосты, куда мог бы перенаправить ответ.
-func newHTTPClient(disableEmbeddedCA bool) (*http.Client, error) {
-	pool, err := rootCAs(disableEmbeddedCA)
+func newHTTPClient() (*http.Client, error) {
+	pool, err := rootCAs()
 	if err != nil {
 		return nil, exitcode.Wrap(exitcode.KindInternal, err)
 	}

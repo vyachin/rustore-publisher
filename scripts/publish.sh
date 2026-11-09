@@ -30,7 +30,6 @@ publish_type="${RUSTORE_PUBLISH_TYPE:-manual}"
 if_exists="${RUSTORE_IF_EXISTS:-fail}"
 metadata_dir="${RUSTORE_METADATA_DIR:-}"
 api_url="${RUSTORE_API_URL:-}"
-no_embedded_ca="${RUSTORE_NO_EMBEDDED_CA:-false}"
 version_code="${RUSTORE_VERSION_CODE:-}"
 timeout_value="${RUSTORE_TIMEOUT:-}"
 request_timeout="${RUSTORE_REQUEST_TIMEOUT:-}"
@@ -112,9 +111,6 @@ if [ -n "$package" ]; then
 fi
 if [ -n "$api_url" ]; then
 	args+=(--api-url "$api_url")
-fi
-if [ "$no_embedded_ca" = "true" ]; then
-	args+=(--no-embedded-ca)
 fi
 if [ -n "$metadata_dir" ]; then
 	args+=(--metadata-dir "$(resolve_path "$metadata_dir")")

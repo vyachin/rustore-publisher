@@ -47,7 +47,7 @@ Actions реализованы; остаются проверка на тест�
 export RUSTORE_CREDENTIALS_FILE="$HOME/.config/rustore/credentials.json"
 # По умолчанию используется https://public-api-m.rustore.ru; сертификаты
 # Минцифры встроены в бинарник. Старый домен: --api-url
-# https://public-api.rustore.ru. Отказ от встроенного CA: --no-embedded-ca.
+# https://public-api.rustore.ru.
 rustore-publisher doctor -p com.example.app -f app-release.aab
 rustore-publisher publish -f app-release.aab --metadata-dir metadata
 rustore-publisher status -p com.example.app
@@ -61,9 +61,6 @@ rustore-publisher status -p com.example.app
 к системному пулу только в HTTP-клиенте RuStore, а редиректы запрещены.
 Источники и отпечатки — в
 [internal/rustore/certs/README.md](internal/rustore/certs/README.md).
-
-Если доверять встроенному CA не нужно, используйте `--no-embedded-ca` вместе
-со старым доменом: `--api-url https://public-api.rustore.ru`.
 
 ## Список изменений
 
