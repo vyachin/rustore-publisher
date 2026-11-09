@@ -1,6 +1,8 @@
 # Учётные данные и секреты
 rustore*.json
 service_account*.json
+service_key*.json
+service-key*.json
 .env
 .env.*
 !.env.example
