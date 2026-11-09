@@ -1,0 +1,52 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Сборка
+        run: go build ./...
+
+      - name: Проверка кода
+        run: go vet ./...
+
+      - name: Тесты с детектором гонок
+        run: go test -race ./...
+
+      - name: Форматирование
+        run: test -z "$(gofmt -l cmd internal)"
+
+      - name: Линтер
+        uses: golangci/golangci-lint-action@v9
+        with:
+          version: latest
+
+      - name: Уязвимости зависимостей
+        run: go run golang.org/x/vuln/cmd/govulncheck@latest ./...
+
+      - name: Проверка workflow
+        run: |
+          go install github.com/rhysd/actionlint/cmd/actionlint@latest
+          "$(go env GOPATH)/bin/actionlint"
+
+      - name: Поиск секретов
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
