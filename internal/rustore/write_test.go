@@ -237,3 +237,25 @@ func TestCreateDraftIsNotRetried(t *testing.T) {
 		t.Errorf("KindOf = %q", kind)
 	}
 }
+
+func TestCreateDraftValidationHint(t *testing.T) {
+	t.Parallel()
+
+	server, client := clientBase(t, func(w http.ResponseWriter, _ *http.Request) {
+		writeJSON(w, http.StatusBadRequest,
+			`{"code":"error","message":"Developer contacts are not filled in"}`)
+	}, new(int32))
+	t.Cleanup(server.Close)
+
+	_, err := client.CreateDraft(context.Background(), "com.example.app",
+		rustore.CreateDraftRequest{PublishType: "MANUAL", PartialValue: 100})
+	if err == nil {
+		t.Fatal("ожидалась ошибка")
+	}
+	if kind := exitcode.KindOf(err); kind != exitcode.KindAPIRejected {
+		t.Errorf("KindOf = %q", kind)
+	}
+	if hint := exitcode.HintOf(err); !strings.Contains(hint, "консоли") {
+		t.Errorf("hint = %q", hint)
+	}
+}

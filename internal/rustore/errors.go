@@ -67,9 +67,14 @@ func classifyAPIError(op operation, apiErr *APIError) error {
 		kind = exitcode.KindOutcomeUnknown
 		hint = "проверьте состояние версии командой status и в консоли RuStore"
 	case apiErr.Status == 400 || apiErr.Status == 422:
-		if op == opListVersions || op == opVersionDetail {
+		switch op {
+		case opListVersions, opVersionDetail:
 			kind = exitcode.KindInvalidArguments
 			hint = "проверьте имя пакета и параметры запроса"
+		case opCreate:
+			hint = "заполните обязательные поля карточки приложения (например, контакты разработчика) в консоли RuStore и повторите"
+		case opCommit:
+			hint = "проверьте обязательные поля и разрешения версии в консоли RuStore"
 		}
 	}
 
