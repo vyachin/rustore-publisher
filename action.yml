@@ -1,0 +1,124 @@
+name: Публикация AAB в RuStore
+description: Загрузить подписанный Android App Bundle в RuStore и отправить на модерацию
+inputs:
+  version:
+    description: Версия CLI (X.Y.Z или vX.Y.Z); по умолчанию берётся тег выпуска действия
+    required: false
+  package:
+    description: Имя пакета приложения; проверяется по AAB
+    required: false
+  aab:
+    description: Путь к подписанному AAB относительно GITHUB_WORKSPACE или абсолютный
+    required: true
+  credentials-file:
+    description: Путь к файлу учётных данных; взаимоисключающий с credentials-json-base64
+    required: false
+  credentials-json-base64:
+    description: Весь JSON учётных данных в Base64; взаимоисключающий с credentials-file
+    required: false
+  metadata-dir:
+    description: Каталог metadata с файлом ru-RU/changelogs/<код версии>.txt
+    required: false
+  version-code:
+    description: Ожидаемый код версии; проверяется по AAB
+    required: false
+  publish-type:
+    description: Режим публикации manual или instantly
+    required: false
+    default: manual
+  if-exists:
+    description: Поведение при уже отправленной версии fail или skip
+    required: false
+    default: fail
+  dry-run:
+    description: Только проверить данные и состояние магазина
+    required: false
+    default: "false"
+  yes:
+    description: Подтвердить автоматическую публикацию instantly
+    required: false
+    default: "false"
+  timeout:
+    description: Общий бюджет команды
+    required: false
+    default: 30m
+  request-timeout:
+    description: Бюджет одного запроса к API
+    required: false
+    default: 2m
+  processing-timeout:
+    description: Бюджет ожидания обработки AAB
+    required: false
+    default: 2m
+  debug:
+    description: Подробный журнал; секреты не выводятся
+    required: false
+    default: "false"
+outputs:
+  version-code:
+    description: Код версии из AAB
+    value: ${{ steps.publish.outputs.version-code }}
+  version-id:
+    description: Идентификатор версии RuStore
+    value: ${{ steps.publish.outputs.version-id }}
+  outcome:
+    description: Итог submitted, skipped, dry_run, failed или unknown
+    value: ${{ steps.publish.outputs.outcome }}
+  version-status:
+    description: Статус версии RuStore
+    value: ${{ steps.publish.outputs.version-status }}
+  submitted:
+    description: Отправлена ли версия на модерацию
+    value: ${{ steps.publish.outputs.submitted }}
+  published:
+    description: Опубликована ли версия
+    value: ${{ steps.publish.outputs.published }}
+  skipped:
+    description: Версия уже была отправлена и действие пропущено
+    value: ${{ steps.publish.outputs.skipped }}
+  manual-action:
+    description: Требуется действие в консоли RuStore
+    value: ${{ steps.publish.outputs.manual-action }}
+  error-code:
+    description: Машинный код ошибки CLI
+    value: ${{ steps.publish.outputs.error-code }}
+  outcome-unknown:
+    description: Результат записи не подтверждён
+    value: ${{ steps.publish.outputs.outcome-unknown }}
+  phase:
+    description: Фаза, на которой завершилась команда
+    value: ${{ steps.publish.outputs.phase }}
+  testing-type:
+    description: Нормализованный тип версии
+    value: ${{ steps.publish.outputs.testing-type }}
+  result-file:
+    description: Путь к сохранённому JSON-результату CLI
+    value: ${{ steps.publish.outputs.result-file }}
+runs:
+  using: composite
+  steps:
+    - name: Публикация
+      id: publish
+      shell: bash
+      env:
+        RUSTORE_VERSION: ${{ inputs.version }}
+        RUSTORE_ACTION_REF: ${{ github.action_ref }}
+        RUSTORE_PACKAGE: ${{ inputs.package }}
+        RUSTORE_AAB: ${{ inputs.aab }}
+        RUSTORE_METADATA_DIR: ${{ inputs['metadata-dir'] }}
+        RUSTORE_VERSION_CODE: ${{ inputs['version-code'] }}
+        RUSTORE_PUBLISH_TYPE: ${{ inputs['publish-type'] }}
+        RUSTORE_IF_EXISTS: ${{ inputs['if-exists'] }}
+        RUSTORE_DRY_RUN: ${{ inputs['dry-run'] }}
+        RUSTORE_YES: ${{ inputs.yes }}
+        RUSTORE_TIMEOUT: ${{ inputs.timeout }}
+        RUSTORE_REQUEST_TIMEOUT: ${{ inputs['request-timeout'] }}
+        RUSTORE_PROCESSING_TIMEOUT: ${{ inputs['processing-timeout'] }}
+        RUSTORE_DEBUG: ${{ inputs.debug }}
+        RUSTORE_CREDENTIALS_FILE: ${{ inputs['credentials-file'] }}
+        RUSTORE_CREDENTIALS_BASE64: ${{ inputs['credentials-json-base64'] }}
+      run: bash "$GITHUB_ACTION_PATH/scripts/publish.sh"
+
+branding:
+  icon: upload
+  color: green

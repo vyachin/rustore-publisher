@@ -1,0 +1,22 @@
+name: Setup rustore-publisher
+description: Установить выпущенный CLI rustore-publisher и добавить его в PATH
+inputs:
+  version:
+    description: Версия CLI, например 0.0.1 или v0.0.1
+    required: true
+outputs:
+  version:
+    description: Нормализованная версия CLI
+    value: ${{ steps.install.outputs.version }}
+  path:
+    description: Каталог с бинарным файлом rustore-publisher
+    value: ${{ steps.install.outputs.path }}
+runs:
+  using: composite
+  steps:
+    - name: Установка rustore-publisher
+      id: install
+      shell: bash
+      env:
+        RUSTORE_VERSION: ${{ inputs.version }}
+      run: bash "$GITHUB_ACTION_PATH/../scripts/setup.sh"

@@ -77,8 +77,12 @@ rustore-publisher status -p com.example.app
 
 ## GitHub Actions
 
-Корневое действие публикации и `setup` для установки CLI появятся в 0.0.1;
-пример workflow описан в [docs/design.md](docs/design.md).
+- `vyachin/rustore-publisher@v0.0.1` — установка CLI и публикация AAB.
+- `vyachin/rustore-publisher/setup@v0.0.1` — только установка CLI.
+
+Входы, выходы, секреты и восстановление описаны в
+[docs/actions.md](docs/actions.md). Архивы выпуска собираются GoReleaser
+для Linux, macOS и Windows на amd64 и arm64; действия работают на Linux.
 
 ## Документация
 
@@ -89,4 +93,4 @@ rustore-publisher status -p com.example.app
 
 ## Лицензия
 
-MIT, см. [LICENSE](LICENSE).
+MIT, см. [LICENSE](LICENSE). История версий — [CHANGELOG.md](CHANGELOG.md).

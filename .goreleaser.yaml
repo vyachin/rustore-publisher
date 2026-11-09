@@ -1,0 +1,48 @@
+version: 2
+
+project_name: rustore-publisher
+
+builds:
+  - id: rustore-publisher
+    main: ./cmd/rustore-publisher
+    binary: rustore-publisher
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w
+      - -X github.com/vyachin/rustore-publisher/internal/version.Version={{ .Version }}
+      - -X github.com/vyachin/rustore-publisher/internal/version.Commit={{ .Commit }}
+      - -X github.com/vyachin/rustore-publisher/internal/version.Date={{ .Date }}
+
+archives:
+  - formats:
+      - tar.gz
+    format_overrides:
+      - goos: windows
+        formats:
+          - zip
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+
+checksum:
+  name_template: checksums.txt
+
+release:
+  header: |
+    Установка CLI и примеры workflow описаны в docs/actions.md.
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^chore:"

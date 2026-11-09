@@ -20,12 +20,15 @@ build:
 
 test:
 	go test ./...
+	bash scripts/setup_test.sh
+	bash scripts/publish_test.sh
 
 test-race:
 	go test -race ./...
 
 lint:
 	golangci-lint run
+	@if command -v shellcheck >/dev/null 2>&1; then shellcheck scripts/*.sh; else echo "shellcheck не установлен: проверка скриптов пропущена"; fi
 	@if command -v actionlint >/dev/null 2>&1; then actionlint; else echo "actionlint не установлен: проверка workflow пропущена"; fi
 
 fmt:

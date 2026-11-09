@@ -33,6 +33,14 @@ jobs:
       - name: Форматирование
         run: test -z "$(gofmt -l cmd internal)"
 
+      - name: Тесты скриптов действия
+        run: |
+          bash scripts/setup_test.sh
+          bash scripts/publish_test.sh
+
+      - name: Линтер скриптов
+        run: shellcheck scripts/*.sh
+
       - name: Линтер
         uses: golangci/golangci-lint-action@v9
         with:
