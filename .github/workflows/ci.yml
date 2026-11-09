@@ -33,3 +33,16 @@ jobs:
       - name: Форматирование
         run: test -z "$(gofmt -l cmd internal)"
 
+      - name: Линтер
+        uses: golangci/golangci-lint-action@v9
+        with:
+          version: latest
+
+      - name: Уязвимости зависимостей
+        run: go run golang.org/x/vuln/cmd/govulncheck@latest ./...
+
+      - name: Проверка workflow
+        run: |
+          go install github.com/rhysd/actionlint/cmd/actionlint@latest
+          "$(go env GOPATH)/bin/actionlint"
+
