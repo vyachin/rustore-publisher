@@ -75,7 +75,6 @@ run_publish() {
 		RUSTORE_REQUEST_TIMEOUT=2m \
 		RUSTORE_PROCESSING_TIMEOUT=2m \
 		RUSTORE_DRY_RUN=true \
-		RUSTORE_YES=true \
 		RUSTORE_DEBUG=false \
 		GITHUB_WORKSPACE="$work" \
 		GITHUB_OUTPUT="${work}/output" \
@@ -100,7 +99,6 @@ grep -q '^error-code=$' "${work}/output" || { printf 'FAIL: error-code\n' >&2; f
 grep -q '^result-file=' "${work}/output" || { printf 'FAIL: result-file\n' >&2; failures=$((failures + 1)); }
 grep -q 'Нет списка изменений' "${work}/summary" || { printf 'FAIL: предупреждение в сводке\n' >&2; failures=$((failures + 1)); }
 check grep -q -- '--dry-run' "$args_file"
-check grep -q -- '--yes' "$args_file"
 check grep -q -- '--metadata-dir' "$args_file"
 check grep -q -- '--contacts-file' "$args_file"
 check grep -q -- '--version-code' "$args_file"

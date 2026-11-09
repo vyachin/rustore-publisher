@@ -1,5 +1,10 @@
 # rustore-publisher
 
+[![CI](https://github.com/vyachin/rustore-publisher/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/vyachin/rustore-publisher/actions/workflows/ci.yml)
+[![Релиз](https://img.shields.io/github/v/release/vyachin/rustore-publisher?include_prereleases&sort=semver)](https://github.com/vyachin/rustore-publisher/releases)
+[![Версия Go](https://img.shields.io/github/go-mod/go-version/vyachin/rustore-publisher)](go.mod)
+[![Лицензия](https://img.shields.io/github/license/vyachin/rustore-publisher)](LICENSE)
+
 CLI и составные действия GitHub Actions для публикации Android App Bundle
 в RuStore.
 
@@ -90,8 +95,8 @@ rustore-publisher status -p com.example.app
 ## Режим публикации
 
 По умолчанию `--publish-type=manual`: после модерации нужен ручной выпуск
-в консоли. Режим `instantly` требует явного `--yes`. Отложенная публикация
-появится в 0.0.2.
+в консоли. Режим `instantly` публикует версию автоматически после одобрения
+модерации и не требует подтверждения.
 
 ## Коды завершения
 

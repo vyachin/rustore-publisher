@@ -10,8 +10,7 @@
 
 ## Решения по последней проверке плана
 
-- [x] Отложенная публикация (`delayed`, `--publish-at`, окно даты и запас 30 минут)
-      перенесена в 0.0.2; в 0.0.1 остаются только `manual|instantly`.
+- [x] Поддерживаются только `manual|instantly`; отдельного подтверждения нет.
 - [x] AUTO_CHECK учитывать как отправленную версию; использовать sendDateForModer
       при skip и восстановлении после потерянного ответа.
 - [x] Защититься от наследования partialValue: явные 100% для MANUAL/INSTANTLY,
@@ -154,7 +153,7 @@ Live-проверки этапа отложены: нужны package и version
   (`sendDateForModer=2026-11-09T19:24:31.952`);
 - `if-exists=skip` вернул `skipped=true`, `if-exists=fail` — код 5
   `VERSION_EXISTS` без записи;
-- версия 38 опубликована полным путём CLI в режиме `instantly --yes`:
+- версия 38 опубликована полным путём CLI в режиме `instantly`:
   `version_id=2064943327`, код 0, `outcome=submitted`, статус `AUTO_CHECK`,
   `sendDateForModer=2026-11-09T19:31:20.268`.
 

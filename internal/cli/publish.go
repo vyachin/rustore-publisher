@@ -26,7 +26,6 @@ func newPublishCmd(a *App, g *globalFlags) *cobra.Command {
 		ifExists          string
 		processingTimeout time.Duration
 		dryRun            bool
-		yes               bool
 	)
 
 	cmd := &cobra.Command{
@@ -36,7 +35,7 @@ func newPublishCmd(a *App, g *globalFlags) *cobra.Command {
 			"и отправить версию на модерацию. Публикация после одобрения выполняется " +
 			"в консоли RuStore для ручного режима.",
 		Example: "  rustore-publisher publish -f app-release.aab --metadata-dir metadata\n" +
-			"  rustore-publisher publish -f app-release.aab --publish-type instantly --yes",
+			"  rustore-publisher publish -f app-release.aab --publish-type instantly",
 		Args: noArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			result := NewResult("publish")
@@ -58,14 +57,6 @@ func newPublishCmd(a *App, g *globalFlags) *cobra.Command {
 				return failPublish(a, g, result, PhasePreflight,
 					exitcode.Errorf(exitcode.KindInvalidArguments,
 						"--processing-timeout должен быть положительным, получен %s", processingTimeout),
-					appcore.PublishReport{})
-			}
-			if publishTypeValue == "INSTANTLY" && !yes {
-				return failPublish(a, g, result, PhasePreflight,
-					exitcode.WithHint(
-						exitcode.Errorf(exitcode.KindInvalidArguments,
-							"для --publish-type=instantly требуется --yes"),
-						"версия будет опубликована автоматически после одобрения модерации"),
 					appcore.PublishReport{})
 			}
 			if err := appcore.CheckArtifactPath(aabPath); err != nil {
@@ -153,7 +144,6 @@ func newPublishCmd(a *App, g *globalFlags) *cobra.Command {
 	flags.DurationVar(&processingTimeout, "processing-timeout", 2*time.Minute,
 		"бюджет ожидания обработки AAB, по умолчанию 2m")
 	flags.BoolVar(&dryRun, "dry-run", false, "только проверить данные и состояние, без записи")
-	flags.BoolVar(&yes, "yes", false, "подтвердить автоматическую публикацию instantly")
 
 	return cmd
 }

@@ -37,7 +37,6 @@ request_timeout="${RUSTORE_REQUEST_TIMEOUT:-}"
 processing_timeout="${RUSTORE_PROCESSING_TIMEOUT:-}"
 debug="${RUSTORE_DEBUG:-false}"
 dry_run="${RUSTORE_DRY_RUN:-false}"
-yes="${RUSTORE_YES:-false}"
 
 [ -n "$aab" ] || die "не задан вход aab"
 
@@ -133,9 +132,6 @@ if [ -n "$processing_timeout" ]; then
 fi
 if [ "$dry_run" = "true" ]; then
 	args+=(--dry-run)
-fi
-if [ "$yes" = "true" ]; then
-	args+=(--yes)
 fi
 if [ "$debug" = "true" ]; then
 	args+=(--debug)

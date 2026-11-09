@@ -40,10 +40,6 @@ inputs:
     description: Только проверить данные и состояние магазина
     required: false
     default: "false"
-  yes:
-    description: Подтвердить автоматическую публикацию instantly
-    required: false
-    default: "false"
   timeout:
     description: Общий бюджет команды
     required: false
@@ -118,7 +114,6 @@ runs:
         RUSTORE_PUBLISH_TYPE: ${{ inputs['publish-type'] }}
         RUSTORE_IF_EXISTS: ${{ inputs['if-exists'] }}
         RUSTORE_DRY_RUN: ${{ inputs['dry-run'] }}
-        RUSTORE_YES: ${{ inputs.yes }}
         RUSTORE_TIMEOUT: ${{ inputs.timeout }}
         RUSTORE_REQUEST_TIMEOUT: ${{ inputs['request-timeout'] }}
         RUSTORE_PROCESSING_TIMEOUT: ${{ inputs['processing-timeout'] }}

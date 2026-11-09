@@ -354,24 +354,23 @@ func TestPublishSettingsMismatch(t *testing.T) {
 	}
 }
 
-func TestPublishInstantlyRequiresYes(t *testing.T) {
+func TestPublishInstantlyWithoutConfirmation(t *testing.T) {
 	t.Parallel()
 
 	store := newPublishStore(t, 10)
 	aab := writeAAB(t, "com.example.app", 42)
 
-	code, stdout, _ := runAPI(t, store.handler, "--json", "publish",
+	code, stdout, stderr := runAPI(t, store.handler, "--json", "publish",
 		"-f", aab, "--publish-type", "instantly")
-	if code != 2 {
-		t.Fatalf("code = %d, want 2", code)
+	if code != 0 {
+		t.Fatalf("code = %d, stderr = %q", code, stderr)
 	}
 	obj := decodeOne(t, stdout)
-	errObj, _ := obj["error"].(map[string]any)
-	if errObj["code"] != "INVALID_ARGUMENTS" {
-		t.Errorf("error = %v", obj["error"])
+	if obj["outcome"] != "submitted" || obj["publish_type"] != "instantly" {
+		t.Errorf("result = %v", obj)
 	}
-	if store.createCalls != 0 {
-		t.Errorf("create вызван без --yes")
+	if store.publishType != "INSTANTLY" {
+		t.Errorf("publishType = %q", store.publishType)
 	}
 }
 
