@@ -1,0 +1,8 @@
+title = "rustore-publisher"
+
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Учебные примеры секретов в документации навыка; не являются учётными данными"
+paths = ['''\.agents/skills/golang-security/references/secrets\.md''']
