@@ -1,16 +1,17 @@
 # rustore-publisher
 
 [![CI](https://github.com/vyachin/rustore-publisher/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/vyachin/rustore-publisher/actions/workflows/ci.yml)
-[![Релиз](https://img.shields.io/github/v/release/vyachin/rustore-publisher?include_prereleases&sort=semver)](https://github.com/vyachin/rustore-publisher/releases)
+[![Релиз](https://img.shields.io/github/v/release/vyachin/rustore-publisher?sort=semver&style=flat-square)](https://github.com/vyachin/rustore-publisher/releases/latest)
 [![Версия Go](https://img.shields.io/github/go-mod/go-version/vyachin/rustore-publisher)](go.mod)
 [![Лицензия](https://img.shields.io/github/license/vyachin/rustore-publisher)](LICENSE)
 
 CLI и составные действия GitHub Actions для публикации Android App Bundle
 в RuStore.
 
-Статус: выпуск 0.0.1. Все пять команд, архивы выпуска и GitHub Actions
-реализованы; чтения и отправка на модерацию проверены на живом приложении.
-Публикация после одобрения модерации ещё не подтверждена. План и чек-лист —
+Статус: выпуск [0.0.1](https://github.com/vyachin/rustore-publisher/releases/latest).
+Все пять команд, архивы выпуска и GitHub Actions реализованы; чтения и отправка
+на модерацию проверены на живом приложении. Публикация после одобрения
+модерации ещё не подтверждена. План и чек-лист —
 [TODO.md](TODO.md), полный контракт — [docs/design.md](docs/design.md).
 
 ## Возможности 0.0.1
