@@ -126,6 +126,12 @@ rustore-publisher status -p com.example.app
 - [TODO.md](TODO.md) — план и состояние работ.
 - [AGENTS.md](AGENTS.md) — правила разработки.
 
+## Зависимости
+
+Go-модули и версии GitHub Actions обновляет Dependabot раз в неделю
+(конфигурация — [.github/dependabot.yml](.github/dependabot.yml)).
+Dependabot alerts и security updates включены в настройках репозитория.
+
 ## Как создавался проект
 
 Проект разработан при существенной помощи ИИ: DeepSeek Harness (deepseek-flash)

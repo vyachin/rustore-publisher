@@ -1,5 +1,12 @@
 # История изменений
 
+## [Unreleased]
+
+### Добавлено
+
+- Dependabot обновляет Go-модули и GitHub Actions раз в неделю; включены
+  Dependabot alerts и security updates.
+
 ## [0.0.1] — 2026-11-09
 
 ### Добавлено

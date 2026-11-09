@@ -101,6 +101,8 @@ Live-проверки этапа отложены: нужны package и version
       workflow с go vet, -race, golangci-lint, govulncheck, actionlint и gitleaks 8.30.1.
       Первый запуск на GitHub не состоялся из-за аварии GitHub Actions 2026-11-09;
       проверку workflow повторить после восстановления сервиса.
+- [x] Подключить Dependabot: `.github/dependabot.yml` для gomod и github-actions,
+      включены alerts и security updates.
 
 Критерий готовности: бинарный файл собирается; неверные локальные данные приводят
 к ошибке до сети; справка и версия работают без учётных данных; текст, JSON

@@ -70,7 +70,8 @@ MANUAL; ручной выпуск выполняется в консоли. --dr
 не переносить зависимости Google API, OAuth и ADC.
 
 Использовать Makefile, golangci-lint, shellcheck, actionlint, govulncheck, Dependabot
-и GoReleaser, как в исходном проекте. Собирать статические бинарные файлы для
+и GoReleaser, как в исходном проекте. Dependabot обновляет Go-модули
+и GitHub Actions раз в неделю; alerts и security updates включены. Собирать статические бинарные файлы для
 Linux/macOS/Windows, amd64/arm64, с версией, коммитом и датой сборки, архивами
 для выпуска и checksums.txt.
 
