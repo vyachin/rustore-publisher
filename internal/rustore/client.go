@@ -42,6 +42,9 @@ type Config struct {
 	MaxAttempts    int
 	RetryBase      time.Duration
 	Logger         *slog.Logger
+	// DisableEmbeddedCA оставляет только системные корни и не доверяет
+	// встроенным сертификатам Минцифры.
+	DisableEmbeddedCA bool
 }
 
 // Client — небольшой клиент Public API RuStore.
@@ -61,7 +64,11 @@ func NewClient(cfg Config) (*Client, error) {
 		cfg.BaseURL = DefaultBaseURL
 	}
 	if cfg.HTTPClient == nil {
-		cfg.HTTPClient = &http.Client{}
+		client, err := newHTTPClient(cfg.DisableEmbeddedCA)
+		if err != nil {
+			return nil, err
+		}
+		cfg.HTTPClient = client
 	}
 	if cfg.Now == nil {
 		cfg.Now = time.Now
@@ -143,9 +150,8 @@ func (c *Client) do(ctx context.Context, method, path string, query map[string]s
 // apiUnavailableHint объясняет недоступность API, включая недоверенный TLS.
 func apiUnavailableHint(err error) string {
 	if isCertificateError(err) {
-		return "сертификат API не доверен: для " + NewBaseURL +
-			" установите корневой CA Минцифры в SSL_CERT_FILE" +
-			" или укажите --api-url " + DefaultBaseURL
+		return "сертификат API не доверен даже со встроенными сертификатами Минцифры: " +
+			"проверьте системное время и прокси; можно использовать --api-url " + LegacyBaseURL
 	}
 	return "повторите команду позже или проверьте доступность API RuStore"
 }

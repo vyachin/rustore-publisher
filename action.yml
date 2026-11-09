@@ -8,8 +8,12 @@ inputs:
     description: Имя пакета приложения; проверяется по AAB
     required: false
   api-url:
-    description: Адрес Public API RuStore; по умолчанию старый домен с публичным сертификатом
+    description: Адрес Public API RuStore; по умолчанию https://public-api-m.rustore.ru
     required: false
+  no-embedded-ca:
+    description: Не доверять встроенным сертификатам Минцифры
+    required: false
+    default: "false"
   aab:
     description: Путь к подписанному AAB относительно GITHUB_WORKSPACE или абсолютный
     required: true
@@ -108,6 +112,7 @@ runs:
         RUSTORE_ACTION_REF: ${{ github.action_ref }}
         RUSTORE_PACKAGE: ${{ inputs.package }}
         RUSTORE_API_URL: ${{ inputs['api-url'] }}
+        RUSTORE_NO_EMBEDDED_CA: ${{ inputs['no-embedded-ca'] }}
         RUSTORE_AAB: ${{ inputs.aab }}
         RUSTORE_METADATA_DIR: ${{ inputs['metadata-dir'] }}
         RUSTORE_VERSION_CODE: ${{ inputs['version-code'] }}

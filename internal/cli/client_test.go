@@ -52,3 +52,25 @@ func TestResolveAPIBaseURL(t *testing.T) {
 		})
 	}
 }
+
+func TestEmbeddedCADisabled(t *testing.T) {
+	t.Setenv("RUSTORE_NO_EMBEDDED_CA", "")
+
+	if embeddedCADisabled(&globalFlags{}) {
+		t.Error("по умолчанию встроенный CA должен быть включён")
+	}
+	if !embeddedCADisabled(&globalFlags{NoEmbeddedCA: true}) {
+		t.Error("флаг не отключает встроенный CA")
+	}
+
+	for _, value := range []string{"1", "true", "yes", "TRUE"} {
+		t.Setenv("RUSTORE_NO_EMBEDDED_CA", value)
+		if !embeddedCADisabled(&globalFlags{}) {
+			t.Errorf("значение %q не отключает встроенный CA", value)
+		}
+	}
+	t.Setenv("RUSTORE_NO_EMBEDDED_CA", "0")
+	if embeddedCADisabled(&globalFlags{}) {
+		t.Error("значение 0 не должно отключать CA")
+	}
+}

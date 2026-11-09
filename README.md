@@ -45,13 +45,25 @@ Actions реализованы; остаются проверка на тест�
 
 ```bash
 export RUSTORE_CREDENTIALS_FILE="$HOME/.config/rustore/credentials.json"
-# По умолчанию используется https://public-api.rustore.ru с публичным сертификатом.
-# Для https://public-api-m.rustore.ru установите корневой CA Минцифры и задайте
-# --api-url или RUSTORE_API_URL.
+# По умолчанию используется https://public-api-m.rustore.ru; сертификаты
+# Минцифры встроены в бинарник. Старый домен: --api-url
+# https://public-api.rustore.ru. Отказ от встроенного CA: --no-embedded-ca.
 rustore-publisher doctor -p com.example.app -f app-release.aab
 rustore-publisher publish -f app-release.aab --metadata-dir metadata
 rustore-publisher status -p com.example.app
 ```
+
+## Сертификаты
+
+Официальные корневой и промежуточный сертификаты Минцифры встроены в бинарный
+файл через `go:embed`, поэтому для домена `public-api-m.rustore.ru` не нужно
+передавать `SSL_CERT_FILE` или устанавливать CA в систему. Они добавляются
+к системному пулу только в HTTP-клиенте RuStore, а редиректы запрещены.
+Источники и отпечатки — в
+[internal/rustore/certs/README.md](internal/rustore/certs/README.md).
+
+Если доверять встроенному CA не нужно, используйте `--no-embedded-ca` вместе
+со старым доменом: `--api-url https://public-api.rustore.ru`.
 
 ## Список изменений
 

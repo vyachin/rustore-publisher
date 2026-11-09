@@ -23,6 +23,7 @@ type globalFlags struct {
 	RequestTimeout time.Duration
 	Credentials    string
 	APIURL         string
+	NoEmbeddedCA   bool
 	cancel         context.CancelFunc
 }
 
@@ -146,6 +147,8 @@ func newRootCmd(app *App) (*cobra.Command, *globalFlags) {
 		"путь к файлу учётных данных (или RUSTORE_CREDENTIALS_FILE)")
 	flags.StringVar(&g.APIURL, "api-url", "",
 		"адрес Public API RuStore (или RUSTORE_API_URL); по умолчанию "+rustore.DefaultBaseURL)
+	flags.BoolVar(&g.NoEmbeddedCA, "no-embedded-ca", false,
+		"не доверять встроенным сертификатам Минцифры (или RUSTORE_NO_EMBEDDED_CA=1)")
 
 	root.AddCommand(
 		newPublishCmd(app, g),
