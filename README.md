@@ -18,6 +18,11 @@ rustore-publisher publish -f app-release.aab --metadata-dir metadata
 Один бинарный файл подходит для локального запуска и CI; для GitHub Actions
 есть готовые действия установки и публикации.
 
+Проект дополняет [google-play-publisher](https://github.com/vyachin/google-play-publisher):
+два инструмента позволяют отправлять обновления в Google Play и RuStore,
+используя общую папку `metadata` со списком изменений.
+[Пример совместного использования](#одна-папка-metadata-для-google-play-и-rustore).
+
 По умолчанию после одобрения модерации вы выпускаете версию вручную в консоли
 RuStore. Если нужен автоматический выпуск, укажите `--publish-type instantly`.
 Команда дожидается отправки на модерацию и завершается, не ожидая её решения.
@@ -138,8 +143,7 @@ rustore-publisher publish -f app-release.aab --metadata-dir metadata
 
 При переданном `--metadata-dir` файл для кода текущей сборки обязателен.
 Название, описания и `images/` из каталога другого магазина не загружаются:
-CLI перечисляет их в предупреждении `METADATA_IGNORED`. Поэтому один каталог
-метаданных можно использовать в процессах публикации для разных магазинов.
+CLI перечисляет их в предупреждении `METADATA_IGNORED`.
 
 Чтобы обновить и контакты разработчика, добавьте
 `metadata/developer-contacts.json`:
@@ -154,6 +158,51 @@ CLI перечисляет их в предупреждении `METADATA_IGNORE
 Достаточно одного поля. Другой путь можно задать через `--contacts-file`,
 в том числе без `--metadata-dir`. [Полный формат и правила проверки контактов](docs/developer-contacts.md).
 Остальные поля карточки наследуются из активной версии.
+
+### Одна папка metadata для Google Play и RuStore
+
+[google-play-publisher](https://github.com/vyachin/google-play-publisher)
+и [rustore-publisher](https://github.com/vyachin/rustore-publisher)
+дополняют друг друга в процессе выпуска Android-приложения. Подготовьте список
+изменений один раз, сохраните его в Git и передайте одну папку `metadata`
+обоим инструментам:
+
+```text
+metadata/
+├── ru-RU/
+│   ├── changelogs/
+│   │   └── 42.txt              # Общий список изменений для обоих магазинов
+│   ├── title.txt               # Название для Google Play
+│   ├── short_description.txt   # Краткое описание для Google Play
+│   ├── full_description.txt    # Полное описание для Google Play
+│   └── images/                 # Изображения для Google Play
+└── developer-contacts.json     # Контакты для RuStore, необязательно
+```
+
+Минимальный общий каталог может содержать только `ru-RU/changelogs/42.txt`.
+Если сборки для обоих магазинов имеют `versionCode=42`, они используют этот
+же файл. Для общего текста учитывайте более строгий лимит Google Play —
+до 500 символов; RuStore допускает до 5000.
+
+```bash
+# Учётные данные каждого магазина настраиваются отдельно.
+
+# Отправить сборку во внутреннее тестирование Google Play.
+google-play-publisher publish -f app-play-release.aab --metadata-dir metadata
+
+# Отправить сборку на модерацию RuStore.
+rustore-publisher publish -f app-rustore-release.aab --metadata-dir metadata
+```
+
+Можно использовать отдельные AAB для магазинов, например с разными SDK,
+сохраняя общий текст изменений. При разных `versionCode` добавьте файл
+для каждого кода версии в тот же каталог `changelogs/`.
+
+Google Play использует локализованные тексты и изображения своей карточки.
+RuStore читает `ru-RU/changelogs/<versionCode>.txt` и необязательные контакты;
+остальные локали и файлы карточки пропускает с `METADATA_IGNORED`.
+Каждая команда выполняется отдельно: отправка в один магазин не запускает
+отправку в другой, а модерация и выпуск проходят по правилам каждого магазина.
 
 ### Выпустить версию автоматически после модерации
 
