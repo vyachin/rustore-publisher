@@ -125,6 +125,12 @@ rustore-publisher status -p com.example.app
 - [TODO.md](TODO.md) — план и состояние работ.
 - [AGENTS.md](AGENTS.md) — правила разработки.
 
+## Как создавался проект
+
+Проект разработан при существенной помощи ИИ: DeepSeek Harness (deepseek-flash)
+и OpenAI Codex, под руководством и проверкой автора. Автор отвечает за
+архитектуру, процесс выпуска и проверку результатов.
+
 ## Лицензия
 
 MIT, см. [LICENSE](LICENSE). История версий — [CHANGELOG.md](CHANGELOG.md).
