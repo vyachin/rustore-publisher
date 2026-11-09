@@ -1,0 +1,22 @@
+# Учётные данные и секреты
+rustore*.json
+service_account*.json
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.jks
+*.keystore
+
+# Артефакты сборки и тестов
+*.aab
+*.apk
+bin/
+dist/
+.cache/
+coverage.out
+
+# Локальные настройки IDE
+/.idea/
