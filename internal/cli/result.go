@@ -150,3 +150,36 @@ type renderedError struct {
 func (e *renderedError) Error() string { return e.err.Error() }
 
 func (e *renderedError) Unwrap() error { return e.err }
+
+// fail фиксирует фазу ошибки и печатает JSON с накопленными фактами.
+func fail(a *App, g *globalFlags, result *Result, phase string, err error) error {
+	result.Phase = phase
+	result.Outcome = OutcomeFailed
+	result.Error = NewErrorDetail(err)
+	if g.JSON {
+		if writeErr := EncodeJSON(a.Stdout, result); writeErr != nil {
+			return writeErr
+		}
+		return &renderedError{err: err}
+	}
+	return err
+}
+
+// failStatus печатает ошибку status вместе с обязательными полями версий.
+func failStatus(a *App, g *globalFlags, result *Result, phase string, err error, latest, draft *VersionFact) error {
+	result.Phase = phase
+	result.Outcome = OutcomeFailed
+	result.Error = NewErrorDetail(err)
+	if g.JSON {
+		payload := StatusResult{
+			Result:        *result,
+			LatestRelease: latest,
+			Draft:         draft,
+		}
+		if writeErr := EncodeJSON(a.Stdout, payload); writeErr != nil {
+			return writeErr
+		}
+		return &renderedError{err: err}
+	}
+	return err
+}

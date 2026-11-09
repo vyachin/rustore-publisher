@@ -248,7 +248,8 @@ func decodeOne(t *testing.T, stdout string) map[string]any {
 	return obj
 }
 
-// assertKeysMatchSchema сверяет набор полей с required в JSON Schema.
+// assertKeysMatchSchema сверяет поля объекта со схемой: лишние поля
+// запрещены, обязательные должны присутствовать.
 func assertKeysMatchSchema(t *testing.T, def string, obj map[string]any) {
 	t.Helper()
 
@@ -260,28 +261,25 @@ func assertKeysMatchSchema(t *testing.T, def string, obj map[string]any) {
 
 	var doc struct {
 		Defs map[string]struct {
-			Required []string `json:"required"`
+			Required   []string                   `json:"required"`
+			Properties map[string]json.RawMessage `json:"properties"`
 		} `json:"$defs"`
 	}
 	if err := json.Unmarshal(data, &doc); err != nil {
 		t.Fatalf("unmarshal schema: %v", err)
 	}
 
-	required, ok := doc.Defs[def]
+	definition, ok := doc.Defs[def]
 	if !ok {
 		t.Fatalf("в схеме нет $defs.%s", def)
 	}
 
-	want := make(map[string]bool, len(required.Required))
-	for _, key := range required.Required {
-		want[key] = true
-	}
 	for key := range obj {
-		if !want[key] {
-			t.Errorf("лишнее поле %q, которого нет в required схемы", key)
+		if _, ok := definition.Properties[key]; !ok {
+			t.Errorf("лишнее поле %q, которого нет в свойствах схемы", key)
 		}
 	}
-	for key := range want {
+	for _, key := range definition.Required {
 		if _, ok := obj[key]; !ok {
 			t.Errorf("нет обязательного поля %q", key)
 		}

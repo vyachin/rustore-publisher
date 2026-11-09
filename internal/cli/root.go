@@ -44,8 +44,13 @@ func Execute(ctx context.Context, app *App, args []string) int {
 
 	code := exitcode.From(err)
 	if ctx.Err() != nil {
-		code = exitcode.Interrupted
-		err = exitcode.Errorf(exitcode.KindInterrupted, "операция прервана")
+		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+			code = exitcode.Transient
+			err = exitcode.Errorf(exitcode.KindCommandTimeout, "время выполнения команды истекло")
+		} else {
+			code = exitcode.Interrupted
+			err = exitcode.Errorf(exitcode.KindInterrupted, "операция прервана")
+		}
 	}
 
 	if g.JSON && !alreadyRendered {
@@ -139,6 +144,8 @@ func newRootCmd(app *App) (*cobra.Command, *globalFlags) {
 		"путь к файлу учётных данных (или RUSTORE_CREDENTIALS_FILE)")
 
 	root.AddCommand(
+		newDoctorCmd(app, g),
+		newStatusCmd(app, g),
 		newVersionCmd(app, g),
 		newCompletionCmd(app, g),
 	)

@@ -5,6 +5,7 @@ import (
 	"io"
 	"log/slog"
 	"os"
+	"time"
 
 	"github.com/vyachin/rustore-publisher/internal/version"
 )
@@ -15,6 +16,11 @@ type App struct {
 	Stderr  io.Writer
 	Logger  *slog.Logger
 	Version version.Info
+
+	// APIBaseURL и Now подменяются в тестах; пустые значения означают
+	// адрес RuStore и системные часы.
+	APIBaseURL string
+	Now        func() time.Time
 }
 
 // DefaultApp возвращает приложение с потоками процесса.
@@ -24,6 +30,7 @@ func DefaultApp() *App {
 		Stderr:  os.Stderr,
 		Logger:  loggingDiscard(),
 		Version: version.New(),
+		Now:     time.Now,
 	}
 }
 
