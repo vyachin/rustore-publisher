@@ -36,6 +36,7 @@ checksum:
   name_template: checksums.txt
 
 release:
+  name_template: "{{ .Tag }}"
   header: |
     Установка CLI и примеры workflow описаны в docs/actions.md.
 
