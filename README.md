@@ -1,7 +1,7 @@
 # rustore-publisher
 
 [![CI](https://github.com/vyachin/rustore-publisher/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/vyachin/rustore-publisher/actions/workflows/ci.yml)
-[![Релиз](https://img.shields.io/github/v/release/vyachin/rustore-publisher?sort=semver&style=flat-square)](https://github.com/vyachin/rustore-publisher/releases/latest)
+[![Релиз](https://img.shields.io/github/v/release/vyachin/rustore-publisher?sort=semver&style=flat-square&cacheSeconds=300)](https://github.com/vyachin/rustore-publisher/releases/latest)
 [![Версия Go](https://img.shields.io/github/go-mod/go-version/vyachin/rustore-publisher)](go.mod)
 [![Лицензия](https://img.shields.io/github/license/vyachin/rustore-publisher)](LICENSE)
 
