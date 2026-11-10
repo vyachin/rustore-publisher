@@ -53,11 +53,16 @@ RuStore. Если нужен автоматический выпуск, укаж
 в `PATH`. Готовые сборки есть для Linux, macOS и Windows на amd64 и arm64;
 Go для их запуска не нужен. [Пример установки из архива](docs/actions.md#установка-cli).
 
-Если установлен Go версии, указанной в [go.mod](go.mod), можно собрать CLI:
+Если установлен Go версии, указанной в [go.mod](go.mod), CLI можно установить
+командой `go install`:
 
 ```bash
-go install github.com/vyachin/rustore-publisher/cmd/rustore-publisher@v0.0.2
+go install github.com/vyachin/rustore-publisher/cmd/rustore-publisher@latest
 ```
+
+`@latest` ставит последний выпущенный тег. Чтобы закрепить версию, замените
+`@latest` на нужный тег, например
+`go install github.com/vyachin/rustore-publisher/cmd/rustore-publisher@v0.0.2`.
 
 Каталог установки Go (по умолчанию `$HOME/go/bin`) должен быть в `PATH`.
 Проверьте запуск:
