@@ -2,6 +2,7 @@ package app_test
 
 import (
 	"bytes"
+	"fmt"
 	"image"
 	"image/jpeg"
 	"image/png"
@@ -13,6 +14,7 @@ import (
 
 	"github.com/vyachin/rustore-publisher/internal/app"
 	"github.com/vyachin/rustore-publisher/internal/exitcode"
+	"github.com/vyachin/rustore-publisher/internal/rustore"
 )
 
 func writeMetadata(t *testing.T, files map[string]string) string {
@@ -485,9 +487,9 @@ func TestReadMetadataIcon(t *testing.T) {
 	t.Parallel()
 
 	root := writeMetadata(t, map[string]string{
-		"ru-RU/changelogs/42.txt":             "Изменения",
-		"ru-RU/images/featureGraphic.png":     "не иконка",
-		"ru-RU/images/phoneScreenshots/1.png": "скриншот",
+		"ru-RU/changelogs/42.txt":                 "Изменения",
+		"ru-RU/images/featureGraphic.png":         "не иконка",
+		"ru-RU/images/sevenInchScreenshots/1.png": "скриншот",
 	})
 	writeImage(t, filepath.Join(root, "ru-RU", "images", "icon.png"), 512, 512, "png")
 
@@ -500,7 +502,7 @@ func TestReadMetadataIcon(t *testing.T) {
 	}
 	want := []string{
 		"ru-RU/images/featureGraphic.png",
-		"ru-RU/images/phoneScreenshots",
+		"ru-RU/images/sevenInchScreenshots",
 	}
 	if !slices.Equal(report.Ignored, want) {
 		t.Errorf("ignored = %v, want %v", report.Ignored, want)
@@ -629,5 +631,212 @@ func writeMetadataFile(t *testing.T, root, name, body string) {
 	}
 	if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
 		t.Fatalf("write %s: %v", name, err)
+	}
+}
+
+func TestReadMetadataScreenshots(t *testing.T) {
+	t.Parallel()
+
+	root := writeMetadata(t, map[string]string{
+		"ru-RU/changelogs/42.txt":         "Изменения",
+		"ru-RU/images/featureGraphic.png": "не скриншот",
+	})
+	phone := filepath.Join(root, "ru-RU", "images", "phoneScreenshots")
+	tablet := filepath.Join(root, "ru-RU", "images", "tenInchScreenshots")
+	tv := filepath.Join(root, "ru-RU", "images", "tvScreenshots")
+	for i := 1; i <= 3; i++ {
+		writeImage(t, filepath.Join(phone, fmt.Sprintf("%02d.png", i)), 1080, 1920, "png")
+		writeImage(t, filepath.Join(tablet, fmt.Sprintf("%02d.png", i)), 1920, 1080, "png")
+		writeImage(t, filepath.Join(tv, fmt.Sprintf("%02d.png", i)), 1920, 1080, "png")
+	}
+
+	report, err := app.ReadMetadata(root, 42)
+	if err != nil {
+		t.Fatalf("ReadMetadata: %v", err)
+	}
+	if len(report.Screenshots) != 9 {
+		t.Fatalf("screenshots = %d, want 9", len(report.Screenshots))
+	}
+	counts := map[rustore.ScreenshotType]int{}
+	for _, shot := range report.Screenshots {
+		counts[shot.Type]++
+		if shot.Ordinal < 0 || shot.Ordinal > 2 {
+			t.Errorf("ordinal = %d", shot.Ordinal)
+		}
+	}
+	if counts[rustore.ScreenshotPhone] != 3 || counts[rustore.ScreenshotTablet] != 3 ||
+		counts[rustore.ScreenshotTV] != 3 {
+		t.Errorf("counts = %v", counts)
+	}
+	if !slices.Equal(report.Ignored, []string{"ru-RU/images/featureGraphic.png"}) {
+		t.Errorf("ignored = %v", report.Ignored)
+	}
+}
+
+func TestReadMetadataScreenshotEmptyDirInherits(t *testing.T) {
+	t.Parallel()
+
+	root := writeMetadata(t, map[string]string{
+		"ru-RU/changelogs/42.txt": "Изменения",
+	})
+	if err := os.MkdirAll(filepath.Join(root, "ru-RU", "images", "phoneScreenshots"), 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+
+	report, err := app.ReadMetadata(root, 42)
+	if err != nil {
+		t.Fatalf("ReadMetadata: %v", err)
+	}
+	if len(report.Screenshots) != 0 {
+		t.Errorf("screenshots = %v, want пусто", report.Screenshots)
+	}
+}
+
+func TestReadMetadataScreenshotErrors(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name  string
+		setup func(t *testing.T, root string)
+		want  string
+	}{
+		{
+			name: "два скриншота",
+			setup: func(t *testing.T, root string) {
+				dir := filepath.Join(root, "ru-RU", "images", "phoneScreenshots")
+				writeImage(t, filepath.Join(dir, "01.png"), 1080, 1920, "png")
+				writeImage(t, filepath.Join(dir, "02.png"), 1080, 1920, "png")
+			},
+			want: "минимум 3",
+		},
+		{
+			name: "одиннадцать скриншотов",
+			setup: func(t *testing.T, root string) {
+				dir := filepath.Join(root, "ru-RU", "images", "phoneScreenshots")
+				for i := 1; i <= 11; i++ {
+					writeImage(t, filepath.Join(dir, fmt.Sprintf("%02d.png", i)), 320, 568, "png")
+				}
+			},
+			want: "не более 10",
+		},
+		{
+			name: "разная ориентация",
+			setup: func(t *testing.T, root string) {
+				dir := filepath.Join(root, "ru-RU", "images", "phoneScreenshots")
+				writeImage(t, filepath.Join(dir, "01.png"), 1080, 1920, "png")
+				writeImage(t, filepath.Join(dir, "02.png"), 1080, 1920, "png")
+				writeImage(t, filepath.Join(dir, "03.png"), 1920, 1080, "png")
+			},
+			want: "одной ориентации",
+		},
+		{
+			name: "неверные пропорции",
+			setup: func(t *testing.T, root string) {
+				dir := filepath.Join(root, "ru-RU", "images", "phoneScreenshots")
+				for i := 1; i <= 3; i++ {
+					writeImage(t, filepath.Join(dir, fmt.Sprintf("%02d.png", i)), 1000, 1000, "png")
+				}
+			},
+			want: "16:9",
+		},
+		{
+			name: "сторона меньше 320",
+			setup: func(t *testing.T, root string) {
+				dir := filepath.Join(root, "ru-RU", "images", "phoneScreenshots")
+				for i := 1; i <= 3; i++ {
+					writeImage(t, filepath.Join(dir, fmt.Sprintf("%02d.png", i)), 319, 567, "png")
+				}
+			},
+			want: "320",
+		},
+		{
+			name: "сторона больше 3840",
+			setup: func(t *testing.T, root string) {
+				dir := filepath.Join(root, "ru-RU", "images", "phoneScreenshots")
+				for i := 1; i <= 3; i++ {
+					writeImage(t, filepath.Join(dir, fmt.Sprintf("%02d.png", i)), 3841, 2160, "png")
+				}
+			},
+			want: "3840",
+		},
+		{
+			name: "файл больше 5 МБ",
+			setup: func(t *testing.T, root string) {
+				dir := filepath.Join(root, "ru-RU", "images", "phoneScreenshots")
+				writeImage(t, filepath.Join(dir, "01.png"), 1080, 1920, "png")
+				writeImage(t, filepath.Join(dir, "02.png"), 1080, 1920, "png")
+				writeMetadataFile(t, root, "ru-RU/images/phoneScreenshots/03.png",
+					strings.Repeat("x", 5<<20+1))
+			},
+			want: "5 МБ",
+		},
+		{
+			name: "неподдерживаемое расширение",
+			setup: func(t *testing.T, root string) {
+				dir := filepath.Join(root, "ru-RU", "images", "phoneScreenshots")
+				writeImage(t, filepath.Join(dir, "01.png"), 1080, 1920, "png")
+				writeImage(t, filepath.Join(dir, "02.png"), 1080, 1920, "png")
+				writeMetadataFile(t, root, "ru-RU/images/phoneScreenshots/03.gif", "gif")
+			},
+			want: "поддерживаются .png",
+		},
+		{
+			name: "не изображение",
+			setup: func(t *testing.T, root string) {
+				dir := filepath.Join(root, "ru-RU", "images", "phoneScreenshots")
+				writeImage(t, filepath.Join(dir, "01.png"), 1080, 1920, "png")
+				writeImage(t, filepath.Join(dir, "02.png"), 1080, 1920, "png")
+				writeMetadataFile(t, root, "ru-RU/images/phoneScreenshots/03.png", "не картинка")
+			},
+			want: "PNG или JPEG",
+		},
+		{
+			name: "расширение не совпадает",
+			setup: func(t *testing.T, root string) {
+				dir := filepath.Join(root, "ru-RU", "images", "phoneScreenshots")
+				writeImage(t, filepath.Join(dir, "01.png"), 1080, 1920, "png")
+				writeImage(t, filepath.Join(dir, "02.png"), 1080, 1920, "png")
+				writeImage(t, filepath.Join(dir, "03.png"), 1080, 1920, "png")
+				if err := os.Rename(filepath.Join(dir, "03.png"), filepath.Join(dir, "03.jpg")); err != nil {
+					t.Fatalf("rename: %v", err)
+				}
+			},
+			want: "PNG",
+		},
+		{
+			name: "вложенный каталог",
+			setup: func(t *testing.T, root string) {
+				dir := filepath.Join(root, "ru-RU", "images", "phoneScreenshots")
+				writeImage(t, filepath.Join(dir, "01.png"), 1080, 1920, "png")
+				writeImage(t, filepath.Join(dir, "02.png"), 1080, 1920, "png")
+				if err := os.MkdirAll(filepath.Join(dir, "03"), 0o755); err != nil {
+					t.Fatalf("mkdir: %v", err)
+				}
+			},
+			want: "вложенный каталог",
+		},
+	}
+
+	for _, test := range tests {
+		test := test
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			root := writeMetadata(t, map[string]string{
+				"ru-RU/changelogs/42.txt": "Изменения",
+			})
+			test.setup(t, root)
+
+			_, err := app.ReadMetadata(root, 42)
+			if err == nil {
+				t.Fatal("ожидалась ошибка")
+			}
+			if kind := exitcode.KindOf(err); kind != exitcode.KindInvalidMetadata {
+				t.Errorf("KindOf = %q, want %q", kind, exitcode.KindInvalidMetadata)
+			}
+			if !strings.Contains(err.Error(), test.want) {
+				t.Errorf("err = %q, want %q", err, test.want)
+			}
+		})
 	}
 }

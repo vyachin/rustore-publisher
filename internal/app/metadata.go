@@ -7,6 +7,7 @@ import (
 	_ "image/jpeg" // регистрирует JPEG-декодер для image.DecodeConfig
 	_ "image/png"  // регистрирует PNG-декодер для image.DecodeConfig
 	"io/fs"
+	"math"
 	"os"
 	"path/filepath"
 	"sort"
@@ -15,6 +16,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/vyachin/rustore-publisher/internal/exitcode"
+	"github.com/vyachin/rustore-publisher/internal/rustore"
 )
 
 // Допустимая раскладка метаданных и пределы текстов и иконки.
@@ -34,7 +36,24 @@ const (
 
 	iconSize     = 512
 	maxIconBytes = 3 << 20
+
+	minScreenshots      = 3
+	maxScreenshots      = 10
+	minScreenshotSide   = 320
+	maxScreenshotSide   = 3840
+	maxScreenshotBytes  = 5 << 20
+	screenshotAspectTol = 0.02
 )
+
+// screenshotDirs сопоставляет каталоги Google Play типам скриншотов RuStore.
+var screenshotDirs = []struct {
+	name string
+	typ  rustore.ScreenshotType
+}{
+	{name: "phoneScreenshots", typ: rustore.ScreenshotPhone},
+	{name: "tenInchScreenshots", typ: rustore.ScreenshotTablet},
+	{name: "tvScreenshots", typ: rustore.ScreenshotTV},
+}
 
 // Listing — тексты карточки, прочитанные из каталога метаданных.
 // nil означает, что файла нет и поле нужно унаследовать из активной версии.
@@ -49,18 +68,29 @@ type Icon struct {
 	Path string
 }
 
+// Screenshot — проверенный скриншот из каталога метаданных.
+type Screenshot struct {
+	Path        string
+	Type        rustore.ScreenshotType
+	Orientation rustore.ScreenshotOrientation
+	Ordinal     int
+}
+
 // Metadata — всё, что публикация читает из каталога метаданных.
 // Ignored перечисляет элементы, которые CLI не использует.
 type Metadata struct {
-	Changelog string
-	Listing   Listing
-	Icon      *Icon
-	Ignored   []string
+	Changelog   string
+	Listing     Listing
+	Icon        *Icon
+	Screenshots []Screenshot
+	Ignored     []string
 }
 
-// ReadMetadata читает список изменений, тексты карточки и иконку из каталога
-// метаданных. Обязательна раскладка metadata/ru-RU/changelogs/<versionCode>.txt;
-// title.txt, short_description.txt, full_description.txt и images/icon.png
+// ReadMetadata читает список изменений, тексты карточки, иконку и скриншоты
+// из каталога метаданных. Обязательна раскладка
+// metadata/ru-RU/changelogs/<versionCode>.txt; title.txt,
+// short_description.txt, full_description.txt, images/icon.png и каталоги
+// images/phoneScreenshots, images/tenInchScreenshots, images/tvScreenshots
 // необязательны. Остальные элементы каталога не публикуются и перечисляются
 // в Ignored.
 func ReadMetadata(metadataDir string, versionCode int64) (Metadata, error) {
@@ -89,7 +119,18 @@ func ReadMetadata(metadataDir string, versionCode int64) (Metadata, error) {
 		return Metadata{}, err
 	}
 
-	return Metadata{Changelog: changelog, Listing: listing, Icon: icon, Ignored: ignored}, nil
+	screenshots, err := readScreenshots(metadataDir)
+	if err != nil {
+		return Metadata{}, err
+	}
+
+	return Metadata{
+		Changelog:   changelog,
+		Listing:     listing,
+		Icon:        icon,
+		Screenshots: screenshots,
+		Ignored:     ignored,
+	}, nil
 }
 
 // readChangelog читает список изменений для кода версии.
@@ -316,6 +357,175 @@ func isIconName(name string) bool {
 	return false
 }
 
+// readScreenshots читает поддерживаемые каталоги скриншотов. Пустой каталог
+// означает «не менять»: Google Play использует пустой каталог для очистки
+// своего набора, а RuStore не должен из-за этого менять свой.
+func readScreenshots(metadataDir string) ([]Screenshot, error) {
+	var screenshots []Screenshot
+	for _, dir := range screenshotDirs {
+		files, err := readScreenshotSet(metadataDir, dir.name, dir.typ)
+		if err != nil {
+			return nil, err
+		}
+		screenshots = append(screenshots, files...)
+	}
+	return screenshots, nil
+}
+
+// readScreenshotSet читает и проверяет один каталог скриншотов.
+func readScreenshotSet(metadataDir, dirName string, typ rustore.ScreenshotType) ([]Screenshot, error) {
+	dir := filepath.Join(metadataDir, metadataLocale, imagesDirName, dirName)
+	info, err := os.Stat(dir)
+	if err != nil {
+		if errors.Is(err, fs.ErrNotExist) {
+			return nil, nil
+		}
+		return nil, invalidMetadata("прочитать каталог %q: %v", dir, err)
+	}
+	if !info.IsDir() {
+		return nil, invalidMetadata("%q не является каталогом", dir)
+	}
+
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return nil, invalidMetadata("прочитать каталог %q: %v", dir, err)
+	}
+
+	paths := make([]string, 0, len(entries))
+	for _, entry := range entries {
+		if strings.HasPrefix(entry.Name(), ".") {
+			continue
+		}
+		if entry.IsDir() {
+			return nil, invalidMetadata("в каталоге %q найден вложенный каталог %q",
+				dir, entry.Name())
+		}
+		paths = append(paths, filepath.Join(dir, entry.Name()))
+	}
+	if len(paths) == 0 {
+		return nil, nil
+	}
+	if len(paths) < minScreenshots {
+		return nil, invalidMetadata("в каталоге %q %d скриншотов, RuStore требует минимум %d (Google Play допускает 2)",
+			dir, len(paths), minScreenshots)
+	}
+	if len(paths) > maxScreenshots {
+		return nil, invalidMetadata("в каталоге %q %d скриншотов, RuStore допускает не более %d (Google Play — до 8)",
+			dir, len(paths), maxScreenshots)
+	}
+
+	sort.Strings(paths)
+	screenshots := make([]Screenshot, 0, len(paths))
+	var orientation rustore.ScreenshotOrientation
+	for ordinal, path := range paths {
+		current, err := validateScreenshot(path)
+		if err != nil {
+			return nil, err
+		}
+		if ordinal == 0 {
+			orientation = current
+		} else if current != orientation {
+			return nil, invalidMetadata("скриншоты в каталоге %q должны быть одной ориентации: %s и %s",
+				dir, orientation, current)
+		}
+		screenshots = append(screenshots, Screenshot{
+			Path:        path,
+			Type:        typ,
+			Orientation: orientation,
+			Ordinal:     ordinal,
+		})
+	}
+	return screenshots, nil
+}
+
+// validateScreenshot проверяет изображение и возвращает его ориентацию.
+func validateScreenshot(path string) (rustore.ScreenshotOrientation, error) {
+	ext := strings.ToLower(filepath.Ext(path))
+	if ext != ".png" && ext != ".jpg" && ext != ".jpeg" {
+		return "", invalidMetadata("скриншот %q: поддерживаются .png, .jpg и .jpeg", path)
+	}
+
+	info, err := os.Stat(path)
+	if err != nil {
+		return "", invalidMetadata("прочитать %q: %v", path, err)
+	}
+	if !info.Mode().IsRegular() {
+		return "", invalidMetadata("%q не является обычным файлом", path)
+	}
+	if info.Size() == 0 {
+		return "", invalidMetadata("файл %q пуст", path)
+	}
+	if info.Size() > maxScreenshotBytes {
+		return "", invalidMetadata("файл %q больше 5 МБ (Google Play допускает до 8 МБ)", path)
+	}
+
+	file, err := os.Open(path)
+	if err != nil {
+		return "", invalidMetadata("открыть %q: %v", path, err)
+	}
+	defer func() { _ = file.Close() }()
+
+	config, format, err := image.DecodeConfig(file)
+	if err != nil {
+		return "", invalidMetadata("файл %q не является изображением PNG или JPEG: %v", path, err)
+	}
+	if config.Width < minScreenshotSide || config.Width > maxScreenshotSide ||
+		config.Height < minScreenshotSide || config.Height > maxScreenshotSide {
+		return "", invalidMetadata("скриншот %q имеет размер %d×%d, стороны должны быть от %d до %d px",
+			path, config.Width, config.Height, minScreenshotSide, maxScreenshotSide)
+	}
+
+	orientation, ok := screenshotOrientation(config.Width, config.Height)
+	if !ok {
+		return "", invalidMetadata("скриншот %q имеет размер %d×%d, нужны пропорции 16:9 или 9:16",
+			path, config.Width, config.Height)
+	}
+
+	switch format {
+	case "png":
+		if ext != ".png" {
+			return "", invalidMetadata("скриншот %q содержит PNG, но расширение %q", path, ext)
+		}
+	case "jpeg":
+		if ext != ".jpg" && ext != ".jpeg" {
+			return "", invalidMetadata("скриншот %q содержит JPEG, но расширение %q", path, ext)
+		}
+	default:
+		return "", invalidMetadata("скриншот %q имеет формат %q, поддерживаются PNG и JPEG", path, format)
+	}
+	return orientation, nil
+}
+
+// screenshotOrientation определяет ориентацию и проверяет пропорции 16:9.
+func screenshotOrientation(width, height int) (rustore.ScreenshotOrientation, bool) {
+	if width == height {
+		return "", false
+	}
+	long, short := width, height
+	if short > long {
+		long, short = short, long
+	}
+	ratio := float64(long) / float64(short)
+	expected := 16.0 / 9.0
+	if math.Abs(ratio-expected)/expected > screenshotAspectTol {
+		return "", false
+	}
+	if width > height {
+		return rustore.OrientationLandscape, true
+	}
+	return rustore.OrientationPortrait, true
+}
+
+// isSupportedScreenshotDir сообщает, что каталог участвует в публикации.
+func isSupportedScreenshotDir(name string) bool {
+	for _, dir := range screenshotDirs {
+		if dir.name == name {
+			return true
+		}
+	}
+	return false
+}
+
 // ignoredMetadataEntries перечисляет элементы каталога метаданных, которые не
 // участвуют в публикации: раскладку карточки другого магазина и служебные файлы.
 // Пути выводятся через косую черту, чтобы сообщение не зависело от платформы.
@@ -371,6 +581,9 @@ func ignoredMetadataEntries(metadataDir string) ([]string, error) {
 					continue
 				}
 				if !imageEntry.IsDir() && isIconName(imageName) {
+					continue
+				}
+				if imageEntry.IsDir() && isSupportedScreenshotDir(imageName) {
 					continue
 				}
 				ignored = append(ignored, filepath.ToSlash(
@@ -430,6 +643,6 @@ func invalidChangelog(format string, args ...any) error {
 func invalidMetadata(format string, args ...any) error {
 	return exitcode.WithHint(
 		exitcode.Errorf(exitcode.KindInvalidMetadata, format, args...),
-		"проверьте тексты metadata/ru-RU и иконку metadata/ru-RU/images/icon.png: PNG или JPEG 512×512, до 3 МБ",
+		"проверьте тексты, иконку и скриншоты в metadata/ru-RU: PNG/JPEG, иконка 512×512 до 3 МБ, скриншоты 3–10 файлов 16:9 или 9:16 до 5 МБ",
 	)
 }

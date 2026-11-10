@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -39,10 +40,22 @@ type publishStore struct {
 	iconUID          string
 	iconNotStored    bool
 
+	screenshots         []storeScreenshot
+	screenshotUploads   int
+	screenshotDeletes   int
+	screenshotNotStored bool
+
 	createCalls int
 	iconCalls   int
 	uploadCalls int
 	commitCalls int
+}
+
+type storeScreenshot struct {
+	ID          int64  `json:"id"`
+	Ordinal     int    `json:"ordinal"`
+	Type        string `json:"type"`
+	Orientation string `json:"orientation"`
 }
 
 func newPublishStore(t *testing.T, activeCode int64) *publishStore {
@@ -74,6 +87,12 @@ func (s *publishStore) handler(w http.ResponseWriter, r *http.Request) {
 		writeStoreJSON(w, http.StatusOK, `{"code":"OK","body":{"jwe":"token-1","ttl":900}}`)
 	case r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/image/icon"):
 		s.uploadIcon(w, r)
+	case r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/image/screenshot"):
+		s.listScreenshots(w)
+	case r.Method == http.MethodPost && strings.Contains(r.URL.Path, "/image/screenshot/"):
+		s.uploadScreenshot(w, r)
+	case r.Method == http.MethodDelete && strings.Contains(r.URL.Path, "/image/screenshot/"):
+		s.deleteScreenshot(w)
 	case r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/aab"):
 		s.upload(w, r)
 	case r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/commit"):
@@ -280,14 +299,34 @@ func writeMetadataFile(t *testing.T, root, name, body string) {
 	}
 }
 
-func writePNGIcon(t *testing.T, root string) {
+func writePNGImage(t *testing.T, path string, width, height int) {
 	t.Helper()
 
 	var buf bytes.Buffer
-	if err := png.Encode(&buf, image.NewRGBA(image.Rect(0, 0, 512, 512))); err != nil {
-		t.Fatalf("encode icon: %v", err)
+	if err := png.Encode(&buf, image.NewRGBA(image.Rect(0, 0, width, height))); err != nil {
+		t.Fatalf("encode image: %v", err)
 	}
-	writeMetadataFile(t, root, "ru-RU/images/icon.png", buf.String())
+	dir := filepath.Dir(path)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	if err := os.WriteFile(path, buf.Bytes(), 0o644); err != nil {
+		t.Fatalf("write image: %v", err)
+	}
+}
+
+func writePNGIcon(t *testing.T, root string) {
+	t.Helper()
+	writePNGImage(t, filepath.Join(root, "ru-RU", "images", "icon.png"), 512, 512)
+}
+
+func writePhoneScreenshots(t *testing.T, root string, count int) {
+	t.Helper()
+	for i := 1; i <= count; i++ {
+		writePNGImage(t,
+			filepath.Join(root, "ru-RU", "images", "phoneScreenshots", fmt.Sprintf("%02d.png", i)),
+			1080, 1920)
+	}
 }
 
 func TestPublishHappyPath(t *testing.T) {
@@ -761,5 +800,146 @@ func TestPublishInvalidContactsStopsBeforeNetwork(t *testing.T) {
 	}
 	if store.createCalls != 0 || store.uploadCalls != 0 {
 		t.Errorf("сеть вызвана до проверки контактов")
+	}
+}
+
+func (s *publishStore) listScreenshots(w http.ResponseWriter) {
+	items := s.screenshots
+	if s.screenshotNotStored {
+		items = nil
+	}
+	data, err := json.Marshal(items)
+	if err != nil {
+		s.t.Fatalf("marshal screenshots: %v", err)
+	}
+	writeStoreJSON(w, http.StatusOK, fmt.Sprintf(
+		`{"code":"OK","body":{"content":%s,"pageNumber":0,"pageSize":20,"totalElements":%d,"totalPages":1}}`,
+		data, len(items)))
+}
+
+func (s *publishStore) uploadScreenshot(w http.ResponseWriter, r *http.Request) {
+	s.screenshotUploads++
+	parts := strings.Split(strings.Trim(r.URL.Path, "/"), "/")
+	if len(parts) < 3 {
+		s.t.Fatalf("path = %q", r.URL.Path)
+	}
+	orientation := parts[len(parts)-3]
+	ordinal, err := strconv.Atoi(parts[len(parts)-2])
+	if err != nil {
+		s.t.Fatalf("ordinal: %v", err)
+	}
+	typ := parts[len(parts)-1]
+
+	reader, err := r.MultipartReader()
+	if err != nil {
+		s.t.Fatalf("multipart: %v", err)
+	}
+	part, err := reader.NextPart()
+	if err != nil {
+		s.t.Fatalf("part: %v", err)
+	}
+	if part.FormName() != "file" {
+		s.t.Errorf("field = %q", part.FormName())
+	}
+	if _, err := io.Copy(io.Discard, part); err != nil {
+		s.t.Fatalf("read screenshot: %v", err)
+	}
+	if !s.screenshotNotStored {
+		s.screenshots = append(s.screenshots, storeScreenshot{
+			ID:          int64(len(s.screenshots) + 1000),
+			Ordinal:     ordinal,
+			Type:        typ,
+			Orientation: orientation,
+		})
+	}
+	writeStoreJSON(w, http.StatusOK, `{"code":"OK"}`)
+}
+
+func (s *publishStore) deleteScreenshot(w http.ResponseWriter) {
+	s.screenshotDeletes++
+	if len(s.screenshots) == 0 {
+		writeStoreJSON(w, http.StatusNotFound, `{"code":"error","message":"not found"}`)
+		return
+	}
+	s.screenshots = s.screenshots[1:]
+	writeStoreJSON(w, http.StatusOK, `{"code":"OK"}`)
+}
+
+func TestPublishSendsScreenshots(t *testing.T) {
+	t.Parallel()
+
+	store := newPublishStore(t, 10)
+	store.screenshots = []storeScreenshot{
+		{ID: 1, Ordinal: 0, Type: "SCREENSHOT", Orientation: "PORTRAIT"},
+		{ID: 2, Ordinal: 1, Type: "SCREENSHOT", Orientation: "PORTRAIT"},
+	}
+	metadata, _ := writeChangelog(t, 42, "Заметки")
+	writePhoneScreenshots(t, metadata, 3)
+	aab := writeAAB(t, "com.example.app", 42)
+
+	code, stdout, stderr := runAPI(t, store.handler, "--json", "publish",
+		"-f", aab, "--metadata-dir", metadata)
+	if code != 0 {
+		t.Fatalf("code = %d, stderr = %q", code, stderr)
+	}
+	if store.screenshotDeletes != 2 {
+		t.Errorf("screenshotDeletes = %d, want 2", store.screenshotDeletes)
+	}
+	if store.screenshotUploads != 3 {
+		t.Errorf("screenshotUploads = %d, want 3", store.screenshotUploads)
+	}
+	if len(store.screenshots) != 3 {
+		t.Errorf("screenshots = %v", store.screenshots)
+	}
+	obj := decodeOne(t, stdout)
+	if obj["outcome"] != "submitted" {
+		t.Errorf("result = %v", obj)
+	}
+}
+
+func TestPublishScreenshotMismatch(t *testing.T) {
+	t.Parallel()
+
+	store := newPublishStore(t, 10)
+	store.screenshotNotStored = true
+	metadata, _ := writeChangelog(t, 42, "Заметки")
+	writePhoneScreenshots(t, metadata, 3)
+	aab := writeAAB(t, "com.example.app", 42)
+
+	code, stdout, _ := runAPI(t, store.handler, "--json", "publish",
+		"-f", aab, "--metadata-dir", metadata)
+	if code != 5 {
+		t.Fatalf("code = %d, want 5", code)
+	}
+	obj := decodeOne(t, stdout)
+	errObj, _ := obj["error"].(map[string]any)
+	if errObj["code"] != "REMOTE_STATE_MISMATCH" {
+		t.Errorf("error = %v", obj["error"])
+	}
+	if store.uploadCalls != 0 {
+		t.Errorf("AAB загружен при несовпадении скриншотов")
+	}
+}
+
+func TestPublishInvalidScreenshotsStopsBeforeNetwork(t *testing.T) {
+	t.Parallel()
+
+	store := newPublishStore(t, 10)
+	metadata, _ := writeChangelog(t, 42, "Заметки")
+	writePhoneScreenshots(t, metadata, 2)
+	aab := writeAAB(t, "com.example.app", 42)
+
+	code, stdout, _ := runAPI(t, store.handler, "--json", "publish",
+		"-f", aab, "--metadata-dir", metadata)
+	if code != 2 {
+		t.Fatalf("code = %d, want 2", code)
+	}
+	obj := decodeOne(t, stdout)
+	errObj, _ := obj["error"].(map[string]any)
+	if errObj["code"] != "INVALID_METADATA" {
+		t.Errorf("error = %v", obj["error"])
+	}
+	if store.createCalls != 0 || store.screenshotUploads != 0 {
+		t.Errorf("сеть вызвана до проверки скриншотов")
 	}
 }

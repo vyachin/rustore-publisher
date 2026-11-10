@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -34,6 +35,7 @@ type PublishInput struct {
 	Changelog         *string
 	Listing           Listing
 	Icon              *Icon
+	Screenshots       []Screenshot
 	Contacts          *rustore.DeveloperContacts
 	PublishType       string
 	IfExists          string
@@ -207,6 +209,15 @@ func Publish(ctx context.Context, client *rustore.Client, in PublishInput, progr
 			return report, err
 		}
 		report.Detail = &updated
+	}
+
+	if len(in.Screenshots) > 0 {
+		if progress != nil {
+			progress.Phase = PhaseUpload
+		}
+		if err := replaceScreenshots(ctx, client, in.Package, versionID, in.Screenshots, &report); err != nil {
+			return report, err
+		}
 	}
 
 	if progress != nil {
@@ -473,6 +484,108 @@ func verifyIcon(detail *rustore.VersionDetail) error {
 
 func nonEmpty(value *string) bool {
 	return value != nil && *value != ""
+}
+
+// screenshotTypeOrder задаёт детерминированный порядок замены типов.
+var screenshotTypeOrder = []rustore.ScreenshotType{
+	rustore.ScreenshotPhone,
+	rustore.ScreenshotTablet,
+	rustore.ScreenshotTV,
+}
+
+// replaceScreenshots заменяет наборы скриншотов в черновике. Сначала удаляются
+// скриншоты каждого переданного типа, затем загружаются новые; так корректно
+// меняется и ориентация. Черновик содержит копии скриншотов активной версии,
+// поэтому удаление не затрагивает опубликованную версию.
+func replaceScreenshots(ctx context.Context, client *rustore.Client,
+	packageName string, versionID int64, screenshots []Screenshot, report *PublishReport,
+) error {
+	existing, err := client.ListScreenshots(ctx, packageName, versionID)
+	if err != nil {
+		return err
+	}
+
+	grouped := groupScreenshots(screenshots)
+	for _, typ := range screenshotTypeOrder {
+		files := grouped[typ]
+		if len(files) == 0 {
+			continue
+		}
+		for _, shot := range existing {
+			if shot.Type != typ {
+				continue
+			}
+			if err := client.DeleteScreenshot(ctx, packageName, versionID, shot.ID); err != nil {
+				markUnknown(report, err)
+				return err
+			}
+		}
+		for _, file := range files {
+			if err := client.UploadScreenshot(ctx, packageName, versionID,
+				file.Type, file.Orientation, file.Ordinal, file.Path); err != nil {
+				markUnknown(report, err)
+				return err
+			}
+		}
+	}
+
+	after, err := client.ListScreenshots(ctx, packageName, versionID)
+	if err != nil {
+		return err
+	}
+	return verifyScreenshots(after, grouped)
+}
+
+// groupScreenshots раскладывает файлы по типам и сортирует по ordinal.
+func groupScreenshots(screenshots []Screenshot) map[rustore.ScreenshotType][]Screenshot {
+	grouped := make(map[rustore.ScreenshotType][]Screenshot)
+	for _, screenshot := range screenshots {
+		grouped[screenshot.Type] = append(grouped[screenshot.Type], screenshot)
+	}
+	for typ := range grouped {
+		sort.Slice(grouped[typ], func(i, j int) bool {
+			return grouped[typ][i].Ordinal < grouped[typ][j].Ordinal
+		})
+	}
+	return grouped
+}
+
+// verifyScreenshots сверяет количество, ordinal и ориентацию после загрузки.
+func verifyScreenshots(actual []rustore.Screenshot, expected map[rustore.ScreenshotType][]Screenshot) error {
+	var differences []string
+	for _, typ := range screenshotTypeOrder {
+		files := expected[typ]
+		if len(files) == 0 {
+			continue
+		}
+		var got []rustore.Screenshot
+		for _, shot := range actual {
+			if shot.Type == typ {
+				got = append(got, shot)
+			}
+		}
+		sort.Slice(got, func(i, j int) bool { return got[i].Ordinal < got[j].Ordinal })
+		if len(got) != len(files) {
+			differences = append(differences,
+				fmt.Sprintf("%s: ожидалось %d, получено %d", typ, len(files), len(got)))
+			continue
+		}
+		for i := range files {
+			if got[i].Ordinal != files[i].Ordinal || got[i].Orientation != files[i].Orientation {
+				differences = append(differences,
+					fmt.Sprintf("%s: ordinal %d сохранён иначе", typ, files[i].Ordinal))
+				break
+			}
+		}
+	}
+	if len(differences) == 0 {
+		return nil
+	}
+	return exitcode.WithHint(
+		exitcode.Errorf(exitcode.KindRemoteStateMismatch,
+			"сервер сохранил скриншоты иначе: %s", strings.Join(differences, "; ")),
+		"проверьте скриншоты в консоли RuStore; не загружайте AAB до выяснения",
+	)
 }
 
 // matchedReleases выбирает релизные версии с заданным кодом.

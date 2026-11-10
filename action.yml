@@ -17,7 +17,7 @@ inputs:
     description: Весь JSON учётных данных в Base64; взаимоисключающий с credentials-file
     required: false
   metadata-dir:
-    description: Каталог metadata с changelog, текстами карточки, иконкой и необязательным developer-contacts.json
+    description: Каталог metadata с changelog, карточкой, иконкой, скриншотами и необязательным developer-contacts.json
     required: false
   contacts-file:
     description: Файл контактов разработчика; по умолчанию metadata/developer-contacts.json

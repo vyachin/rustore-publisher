@@ -174,7 +174,7 @@ func isCertificateError(err error) bool {
 // safeToRetry сообщает, можно ли повторять операцию автоматически.
 // Запись (создание, загрузка, commit) не повторяется вслепую.
 func safeToRetry(op operation) bool {
-	return op == opListVersions || op == opVersionDetail
+	return op == opListVersions || op == opVersionDetail || op == opListScreenshots
 }
 
 // bodyReader возвращает тело запроса или nil для пустого тела.

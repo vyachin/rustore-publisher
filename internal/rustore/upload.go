@@ -150,20 +150,28 @@ func (c *Client) UploadIcon(ctx context.Context, packageName string, versionID i
 		return exitcode.Errorf(exitcode.KindInvalidArguments,
 			"для загрузки иконки нужны package и положительный versionId")
 	}
+	endpoint := fmt.Sprintf("/public/v1/application/%s/version/%d/image/icon",
+		url.PathEscape(packageName), versionID)
+	return c.uploadImage(ctx, endpoint, path, maxIconSize, opUploadIcon)
+}
 
+// uploadImage отправляет изображение в черновик multipart-полем file.
+// Content-Type части выбирается по расширению: API RuStore отклоняет
+// application/octet-stream для иконки и скриншотов.
+func (c *Client) uploadImage(ctx context.Context, endpoint, path string, maxSize int64, op operation) error {
 	stat, err := os.Stat(path)
 	if err != nil {
 		return exitcode.WithHint(
 			exitcode.Wrap(exitcode.KindInvalidMetadata, fmt.Errorf("прочитать %q: %w", path, err)),
-			"проверьте путь к иконке",
+			"проверьте путь к изображению",
 		)
 	}
 	if stat.Size() == 0 {
 		return exitcode.Errorf(exitcode.KindInvalidMetadata, "файл %q пуст", path)
 	}
-	if stat.Size() > maxIconSize {
+	if stat.Size() > maxSize {
 		return exitcode.Errorf(exitcode.KindInvalidMetadata,
-			"файл %q больше допустимых 3 МБ", path)
+			"файл %q больше допустимых %d МБ", path, maxSize>>20)
 	}
 
 	data, err := os.ReadFile(path)
@@ -203,8 +211,7 @@ func (c *Client) UploadIcon(ctx context.Context, packageName string, versionID i
 		return err
 	}
 
-	url := fmt.Sprintf("%s/public/v1/application/%s/version/%d/image/icon",
-		c.cfg.BaseURL, url.PathEscape(packageName), versionID)
+	url := c.cfg.BaseURL + endpoint
 	request, err := http.NewRequestWithContext(ctx, http.MethodPost, url, &body)
 	if err != nil {
 		return exitcode.Wrap(exitcode.KindInternal, err)
@@ -214,8 +221,8 @@ func (c *Client) UploadIcon(ctx context.Context, packageName string, versionID i
 	request.Header.Set("Public-Token", token)
 	request.ContentLength = int64(body.Len())
 
-	c.cfg.Logger.DebugContext(ctx, "загрузка иконки",
-		"path", path, "size", stat.Size(), "version_id", versionID)
+	c.cfg.Logger.DebugContext(ctx, "загрузка изображения",
+		"path", path, "size", stat.Size())
 
 	response, err := c.cfg.HTTPClient.Do(request)
 	if err != nil {
@@ -224,8 +231,8 @@ func (c *Client) UploadIcon(ctx context.Context, packageName string, versionID i
 		}
 		return exitcode.WithHint(
 			exitcode.Wrap(exitcode.KindOutcomeUnknown,
-				fmt.Errorf("загрузка иконки прервана: %w", err)),
-			fmt.Sprintf("проверьте иконку версии %d в консоли RuStore", versionID),
+				fmt.Errorf("загрузка изображения прервана: %w", err)),
+			"проверьте изображение версии в консоли RuStore",
 		)
 	}
 	defer func() { _ = response.Body.Close() }()
@@ -234,25 +241,25 @@ func (c *Client) UploadIcon(ctx context.Context, packageName string, versionID i
 	if err != nil {
 		return exitcode.WithHint(
 			exitcode.Wrap(exitcode.KindOutcomeUnknown,
-				fmt.Errorf("прочитать ответ загрузки иконки: %w", err)),
-			fmt.Sprintf("проверьте иконку версии %d в консоли RuStore", versionID),
+				fmt.Errorf("прочитать ответ загрузки изображения: %w", err)),
+			"проверьте изображение версии в консоли RuStore",
 		)
 	}
 
 	if response.StatusCode >= http.StatusBadRequest {
-		return classifyAPIError(opUploadIcon, apiErrorFrom(response.StatusCode, answer))
+		return classifyAPIError(op, apiErrorFrom(response.StatusCode, answer))
 	}
 
 	var env envelope
 	if err := json.Unmarshal(answer, &env); err != nil {
 		return exitcode.WithHint(
 			exitcode.Wrap(exitcode.KindAPIResponseInvalid,
-				fmt.Errorf("разобрать ответ загрузки иконки: %w", err)),
+				fmt.Errorf("разобрать ответ загрузки изображения: %w", err)),
 			"повторите команду; если ошибка повторяется, проверьте ответ API",
 		)
 	}
 	if env.Code != "OK" {
-		return classifyAPIError(opUploadIcon, &APIError{
+		return classifyAPIError(op, &APIError{
 			Status:  response.StatusCode,
 			Code:    env.Code,
 			Message: messageOf(env.Message),

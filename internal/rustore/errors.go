@@ -31,9 +31,12 @@ const (
 	opAuth operation = iota
 	opListVersions
 	opVersionDetail
+	opListScreenshots
 	opCreate
 	opUpload
 	opUploadIcon
+	opUploadScreenshot
+	opDeleteScreenshot
 	opCommit
 )
 
@@ -49,7 +52,7 @@ func classifyAPIError(op operation, apiErr *APIError) error {
 	case apiErr.Status == 403:
 		kind = exitcode.KindAccessDenied
 		hint = "проверьте, что ключ API выдан для этого приложения и нужных методов"
-	case apiErr.Status == 404 && (op == opVersionDetail || op == opUpload || op == opUploadIcon || op == opCommit):
+	case apiErr.Status == 404 && (op == opVersionDetail || op == opListScreenshots || op == opUpload || op == opUploadIcon || op == opUploadScreenshot || op == opDeleteScreenshot || op == opCommit):
 		kind = exitcode.KindVersionNotFound
 		hint = "проверьте идентификатор версии"
 	case apiErr.Status == 404 && op == opCreate:
@@ -63,7 +66,7 @@ func classifyAPIError(op operation, apiErr *APIError) error {
 	case apiErr.Status == 409 && op == opCreate:
 		kind = exitcode.KindExistingDraft
 		hint = "завершите или удалите существующий черновик в консоли RuStore"
-	case (op == opCreate || op == opUpload || op == opUploadIcon || op == opCommit) && apiErr.Status >= 500:
+	case (op == opCreate || op == opUpload || op == opUploadIcon || op == opUploadScreenshot || op == opDeleteScreenshot || op == opCommit) && apiErr.Status >= 500:
 		// Ответ 5xx на запись не доказывает, что изменение не применилось.
 		kind = exitcode.KindOutcomeUnknown
 		hint = "проверьте состояние версии командой status и в консоли RuStore"
@@ -76,6 +79,10 @@ func classifyAPIError(op operation, apiErr *APIError) error {
 			hint = "заполните обязательные поля карточки приложения (например, контакты разработчика) в консоли RuStore и повторите"
 		case opUploadIcon:
 			hint = "проверьте формат иконки: PNG или JPEG 512×512, до 3 МБ"
+		case opUploadScreenshot:
+			hint = "проверьте формат, размеры, ориентацию и ordinal скриншота"
+		case opDeleteScreenshot:
+			hint = "проверьте идентификатор скриншота и версию"
 		case opCommit:
 			hint = "проверьте обязательные поля и разрешения версии в консоли RuStore"
 		}
