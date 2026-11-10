@@ -48,7 +48,7 @@ RuStore. Если нужен автоматический выпуск, укаж
 ### 1. Установите CLI
 
 Скачайте архив для своей платформы из
-[выпуска v0.0.3](https://github.com/vyachin/rustore-publisher/releases/tag/v0.0.3),
+[выпуска v0.0.4](https://github.com/vyachin/rustore-publisher/releases/tag/v0.0.4),
 сверьте его с `checksums.txt`, распакуйте и добавьте каталог с бинарным файлом
 в `PATH`. Готовые сборки есть для Linux, macOS и Windows на amd64 и arm64;
 Go для их запуска не нужен. [Пример установки из архива](docs/actions.md#установка-cli).
@@ -62,7 +62,7 @@ go install github.com/vyachin/rustore-publisher/cmd/rustore-publisher@latest
 
 `@latest` ставит последний выпущенный тег. Чтобы закрепить версию, замените
 `@latest` на нужный тег, например
-`go install github.com/vyachin/rustore-publisher/cmd/rustore-publisher@v0.0.3`.
+`go install github.com/vyachin/rustore-publisher/cmd/rustore-publisher@v0.0.4`.
 
 Каталог установки Go (по умолчанию `$HOME/go/bin`) должен быть в `PATH`.
 Проверьте запуск:
@@ -292,9 +292,9 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       # Здесь соберите и подпишите AAB или скачайте готовую сборку.
-      - uses: vyachin/rustore-publisher@v0.0.3
+      - uses: vyachin/rustore-publisher@v0.0.4
         with:
-          version: 0.0.3
+          version: 0.0.4
           package: com.example.app
           aab: app/build/outputs/bundle/release/app-release.aab
           credentials-base64: ${{ secrets.RUSTORE_CREDENTIALS_BASE64 }}
@@ -316,7 +316,7 @@ base64 -i credentials.json | tr -d '\n'
 ```
 
 Действия работают на Linux amd64/arm64. Для установки CLI без публикации
-используйте `vyachin/rustore-publisher/setup@v0.0.3` с `version: 0.0.3`.
+используйте `vyachin/rustore-publisher/setup@v0.0.4` с `version: 0.0.4`.
 [Все входы, выходы и правила восстановления](docs/actions.md).
 
 ### Получить результат для скрипта или другого CI
@@ -357,10 +357,9 @@ rustore-publisher completion bash
 - [План и состояние работ](TODO.md).
 - [Архитектурные решения](docs/adr).
 
-В версии 0.0.3 чтения и отправка на модерацию проверены на живом приложении.
-Передача названия и описаний проверена на живом API созданием черновика;
-иконка проверена там же и войдёт в следующий выпуск. Публикация после
-одобрения модерации ещё не подтверждена.
+В версии 0.0.4 чтения и отправка на модерацию проверены на живом приложении.
+Передача названия, описаний и иконки проверена на живом API созданием черновика.
+Публикация после одобрения модерации ещё не подтверждена.
 
 ## Разработка
 
