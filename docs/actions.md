@@ -78,7 +78,7 @@ base64 -i rustore.json    # macOS, без переносов строк
 | `aab` | обязателен | Путь к подписанному AAB |
 | `credentials-json-base64` | — | Весь JSON учётных данных в Base64 |
 | `credentials-file` | — | Путь к файлу учётных данных |
-| `metadata-dir` | — | Каталог `metadata` со списком изменений, текстами карточки и контактами |
+| `metadata-dir` | — | Каталог `metadata` со списком изменений, текстами карточки, иконкой и контактами |
 | `contacts-file` | `metadata/developer-contacts.json` | Файл контактов разработчика, формат — [developer-contacts.md](developer-contacts.md) |
 | `version-code` | из AAB | Ожидаемый код версии |
 | `publish-type` | `manual` | `manual` или `instantly` |
@@ -119,7 +119,7 @@ base64 -i rustore.json    # macOS, без переносов строк
 
 - Подпись AAB должна быть заранее настроена в консоли RuStore.
 - Частичный охват не поддерживается.
-- Название и описания карточки читаются из `ru-RU/title.txt`,
-  `short_description.txt` и `full_description.txt`. Иконки и скриншоты не
-  загружаются; элементы каталога вне поддерживаемых файлов перечисляются
-  в предупреждении `METADATA_IGNORED`, а не отклоняются.
+- Название, описания и иконка читаются из `ru-RU/title.txt`,
+  `short_description.txt`, `full_description.txt` и `ru-RU/images/icon.png`.
+  Скриншоты не загружаются; элементы каталога вне поддерживаемых файлов
+  перечисляются в предупреждении `METADATA_IGNORED`, а не отклоняются.

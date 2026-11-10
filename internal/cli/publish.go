@@ -31,7 +31,7 @@ func newPublishCmd(a *App, g *globalFlags) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "publish",
 		Short: "Загрузить AAB и отправить его на модерацию",
-		Long: "Проверить AAB, список изменений и тексты карточки, создать черновик, " +
+		Long: "Проверить AAB, список изменений, тексты карточки и иконку, создать черновик, " +
 			"загрузить файл и отправить версию на модерацию. Публикация после " +
 			"одобрения выполняется в консоли RuStore для ручного режима.",
 		Example: "  rustore-publisher publish -f app-release.aab --metadata-dir metadata\n" +
@@ -85,6 +85,7 @@ func newPublishCmd(a *App, g *globalFlags) *cobra.Command {
 
 			var changelog *string
 			var listing appcore.Listing
+			var icon *appcore.Icon
 			if metadataDir != "" {
 				metadata, err := appcore.ReadMetadata(metadataDir, bundle.Identity.VersionCode)
 				if err != nil {
@@ -92,6 +93,7 @@ func newPublishCmd(a *App, g *globalFlags) *cobra.Command {
 				}
 				changelog = &metadata.Changelog
 				listing = metadata.Listing
+				icon = metadata.Icon
 				if len(metadata.Ignored) > 0 {
 					result.Warnings = append(result.Warnings, Warning{
 						Code: appcore.WarningMetadataIgnored,
@@ -117,6 +119,7 @@ func newPublishCmd(a *App, g *globalFlags) *cobra.Command {
 				Bundle:            bundle,
 				Changelog:         changelog,
 				Listing:           listing,
+				Icon:              icon,
 				Contacts:          contacts,
 				PublishType:       publishTypeValue,
 				IfExists:          ifExists,
@@ -151,7 +154,7 @@ func newPublishCmd(a *App, g *globalFlags) *cobra.Command {
 	flags.StringVarP(&packageName, "package", "p", "", "имя пакета приложения; проверяется по AAB")
 	flags.StringVarP(&aabPath, "aab", "f", "", "путь к AAB (обязательно)")
 	flags.StringVar(&metadataDir, "metadata-dir", "",
-		"каталог metadata со списком изменений и текстами карточки")
+		"каталог metadata со списком изменений, текстами карточки и иконкой")
 	flags.StringVar(&contactsFile, "contacts-file", "",
 		"файл контактов разработчика; по умолчанию metadata/"+appcore.ContactsFileName)
 	flags.Int64Var(&versionCode, "version-code", 0, "ожидаемый код версии; проверяется по AAB")

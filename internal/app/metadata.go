@@ -3,6 +3,9 @@ package app
 import (
 	"errors"
 	"fmt"
+	"image"
+	_ "image/jpeg" // регистрирует JPEG-декодер для image.DecodeConfig
+	_ "image/png"  // регистрирует PNG-декодер для image.DecodeConfig
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -14,10 +17,11 @@ import (
 	"github.com/vyachin/rustore-publisher/internal/exitcode"
 )
 
-// Допустимая раскладка метаданных и пределы текстов.
+// Допустимая раскладка метаданных и пределы текстов и иконки.
 const (
 	metadataLocale   = "ru-RU"
 	changelogDirName = "changelogs"
+	imagesDirName    = "images"
 
 	appNameFileName          = "title.txt"
 	shortDescriptionFileName = "short_description.txt"
@@ -27,6 +31,9 @@ const (
 	maxAppNameRunes          = 50
 	maxShortDescriptionRunes = 80
 	maxFullDescriptionRunes  = 4000
+
+	iconSize     = 512
+	maxIconBytes = 3 << 20
 )
 
 // Listing — тексты карточки, прочитанные из каталога метаданных.
@@ -37,18 +44,25 @@ type Listing struct {
 	FullDescription  *string
 }
 
+// Icon — проверенная иконка приложения из каталога метаданных.
+type Icon struct {
+	Path string
+}
+
 // Metadata — всё, что публикация читает из каталога метаданных.
 // Ignored перечисляет элементы, которые CLI не использует.
 type Metadata struct {
 	Changelog string
 	Listing   Listing
+	Icon      *Icon
 	Ignored   []string
 }
 
-// ReadMetadata читает список изменений и тексты карточки из каталога
+// ReadMetadata читает список изменений, тексты карточки и иконку из каталога
 // метаданных. Обязательна раскладка metadata/ru-RU/changelogs/<versionCode>.txt;
-// title.txt, short_description.txt и full_description.txt необязательны.
-// Остальные элементы каталога не публикуются и перечисляются в Ignored.
+// title.txt, short_description.txt, full_description.txt и images/icon.png
+// необязательны. Остальные элементы каталога не публикуются и перечисляются
+// в Ignored.
 func ReadMetadata(metadataDir string, versionCode int64) (Metadata, error) {
 	if versionCode <= 0 {
 		return Metadata{}, exitcode.Errorf(exitcode.KindInvalidArguments,
@@ -70,7 +84,12 @@ func ReadMetadata(metadataDir string, versionCode int64) (Metadata, error) {
 		return Metadata{}, err
 	}
 
-	return Metadata{Changelog: changelog, Listing: listing, Ignored: ignored}, nil
+	icon, err := readIcon(metadataDir)
+	if err != nil {
+		return Metadata{}, err
+	}
+
+	return Metadata{Changelog: changelog, Listing: listing, Icon: icon, Ignored: ignored}, nil
 }
 
 // readChangelog читает список изменений для кода версии.
@@ -195,6 +214,108 @@ func readOptionalText(path string, limit int, singleLine bool) (*string, error) 
 	return &text, nil
 }
 
+// readIcon читает необязательную иконку приложения из images/icon.png
+// или images/icon.jpg. Несколько файлов иконки одновременно запрещены.
+func readIcon(metadataDir string) (*Icon, error) {
+	imagesDir := filepath.Join(metadataDir, metadataLocale, imagesDirName)
+	info, err := os.Stat(imagesDir)
+	if err != nil {
+		if errors.Is(err, fs.ErrNotExist) {
+			return nil, nil
+		}
+		return nil, invalidMetadata("прочитать каталог %q: %v", imagesDir, err)
+	}
+	if !info.IsDir() {
+		return nil, invalidMetadata("%q не является каталогом", imagesDir)
+	}
+
+	entries, err := os.ReadDir(imagesDir)
+	if err != nil {
+		return nil, invalidMetadata("прочитать каталог %q: %v", imagesDir, err)
+	}
+
+	var icons []string
+	for _, entry := range entries {
+		if strings.HasPrefix(entry.Name(), ".") || !isIconName(entry.Name()) {
+			continue
+		}
+		if entry.IsDir() {
+			return nil, invalidMetadata("%q не является файлом иконки",
+				filepath.Join(imagesDir, entry.Name()))
+		}
+		icons = append(icons, filepath.Join(imagesDir, entry.Name()))
+	}
+	if len(icons) == 0 {
+		return nil, nil
+	}
+	if len(icons) > 1 {
+		return nil, invalidMetadata("найдено несколько иконок: %s; оставьте один файл",
+			strings.Join(icons, ", "))
+	}
+
+	path := icons[0]
+	if err := validateIcon(path); err != nil {
+		return nil, err
+	}
+	return &Icon{Path: path}, nil
+}
+
+// validateIcon проверяет формат, размер файла и размеры изображения.
+func validateIcon(path string) error {
+	info, err := os.Stat(path)
+	if err != nil {
+		return invalidMetadata("прочитать %q: %v", path, err)
+	}
+	if !info.Mode().IsRegular() {
+		return invalidMetadata("%q не является обычным файлом", path)
+	}
+	if info.Size() == 0 {
+		return invalidMetadata("файл %q пуст", path)
+	}
+	if info.Size() > maxIconBytes {
+		return invalidMetadata("файл %q больше 3 МБ", path)
+	}
+
+	file, err := os.Open(path)
+	if err != nil {
+		return invalidMetadata("открыть %q: %v", path, err)
+	}
+	defer func() { _ = file.Close() }()
+
+	config, format, err := image.DecodeConfig(file)
+	if err != nil {
+		return invalidMetadata("файл %q не является изображением PNG или JPEG: %v", path, err)
+	}
+	if config.Width != iconSize || config.Height != iconSize {
+		return invalidMetadata("иконка %q имеет размер %d×%d, ожидался %d×%d",
+			path, config.Width, config.Height, iconSize, iconSize)
+	}
+
+	ext := strings.ToLower(filepath.Ext(path))
+	switch format {
+	case "png":
+		if ext != ".png" {
+			return invalidMetadata("иконка %q содержит PNG, но расширение %q", path, ext)
+		}
+	case "jpeg":
+		if ext != ".jpg" && ext != ".jpeg" {
+			return invalidMetadata("иконка %q содержит JPEG, но расширение %q", path, ext)
+		}
+	default:
+		return invalidMetadata("иконка %q имеет формат %q, поддерживаются PNG и JPEG", path, format)
+	}
+	return nil
+}
+
+// isIconName сообщает, что файл является одним из допустимых имён иконки.
+func isIconName(name string) bool {
+	switch name {
+	case "icon.png", "icon.jpg", "icon.jpeg":
+		return true
+	}
+	return false
+}
+
 // ignoredMetadataEntries перечисляет элементы каталога метаданных, которые не
 // участвуют в публикации: раскладку карточки другого магазина и служебные файлы.
 // Пути выводятся через косую черту, чтобы сообщение не зависело от платформы.
@@ -237,6 +358,24 @@ func ignoredMetadataEntries(metadataDir string) ([]string, error) {
 		case strings.HasPrefix(name, "."):
 			continue
 		case entry.IsDir() && name == changelogDirName:
+			continue
+		case entry.IsDir() && name == imagesDirName:
+			imageEntries, err := os.ReadDir(filepath.Join(localeDir, name))
+			if err != nil {
+				return nil, invalidMetadata("прочитать каталог %q: %v",
+					filepath.Join(localeDir, name), err)
+			}
+			for _, imageEntry := range imageEntries {
+				imageName := imageEntry.Name()
+				if strings.HasPrefix(imageName, ".") {
+					continue
+				}
+				if !imageEntry.IsDir() && isIconName(imageName) {
+					continue
+				}
+				ignored = append(ignored, filepath.ToSlash(
+					filepath.Join(metadataLocale, name, imageName)))
+			}
 			continue
 		case !entry.IsDir() && isListingName(name):
 			continue
@@ -291,6 +430,6 @@ func invalidChangelog(format string, args ...any) error {
 func invalidMetadata(format string, args ...any) error {
 	return exitcode.WithHint(
 		exitcode.Errorf(exitcode.KindInvalidMetadata, format, args...),
-		"тексты карточки задаются файлами metadata/ru-RU/title.txt, short_description.txt и full_description.txt в UTF-8",
+		"проверьте тексты metadata/ru-RU и иконку metadata/ru-RU/images/icon.png: PNG или JPEG 512×512, до 3 МБ",
 	)
 }

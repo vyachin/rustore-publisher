@@ -33,6 +33,7 @@ type PublishInput struct {
 	Bundle            *artifact.Bundle
 	Changelog         *string
 	Listing           Listing
+	Icon              *Icon
 	Contacts          *rustore.DeveloperContacts
 	PublishType       string
 	IfExists          string
@@ -189,6 +190,24 @@ func Publish(ctx context.Context, client *rustore.Client, in PublishInput, progr
 	}
 	report.Detail = &detail
 	report.Version = created
+
+	if in.Icon != nil {
+		if progress != nil {
+			progress.Phase = PhaseUpload
+		}
+		if err := client.UploadIcon(ctx, in.Package, versionID, in.Icon.Path); err != nil {
+			markUnknown(&report, err)
+			return report, err
+		}
+		updated, err := client.VersionDetail(ctx, in.Package, versionID)
+		if err != nil {
+			return report, err
+		}
+		if err := verifyIcon(&updated); err != nil {
+			return report, err
+		}
+		report.Detail = &updated
+	}
 
 	if progress != nil {
 		progress.Phase = PhaseUpload
@@ -438,6 +457,22 @@ func listingDifferences(detail *rustore.VersionDetail, listing Listing) []string
 // sameText сравнивает сохранённое значение с отправленным.
 func sameText(stored *string, expected *string) bool {
 	return stored != nil && expected != nil && *stored == *expected
+}
+
+// verifyIcon проверяет, что после загрузки API вернул иконку версии.
+func verifyIcon(detail *rustore.VersionDetail) error {
+	if nonEmpty(detail.IconUID) || nonEmpty(detail.IconURL) {
+		return nil
+	}
+	return exitcode.WithHint(
+		exitcode.Errorf(exitcode.KindRemoteStateMismatch,
+			"сервер не сохранил иконку версии %d", detail.VersionID),
+		"проверьте иконку в консоли RuStore; не загружайте AAB до выяснения",
+	)
+}
+
+func nonEmpty(value *string) bool {
+	return value != nil && *value != ""
 }
 
 // matchedReleases выбирает релизные версии с заданным кодом.

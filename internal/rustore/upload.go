@@ -1,12 +1,15 @@
 package rustore
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
 	"io"
+	"mime"
 	"mime/multipart"
 	"net/http"
+	"net/textproto"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -17,6 +20,9 @@ import (
 
 // maxAABSize — ограничение RuStore на размер AAB.
 const maxAABSize = 5 << 30
+
+// maxIconSize — ограничение RuStore на размер иконки.
+const maxIconSize = 3 << 20
 
 // UploadAAB потоково загружает AAB в созданный черновик.
 //
@@ -133,6 +139,126 @@ func (c *Client) UploadAAB(ctx context.Context, packageName string, versionID in
 		}
 	}
 	return UploadResult(body), nil
+}
+
+// UploadIcon загружает иконку в созданный черновик.
+//
+// Запрос не повторяется автоматически: после сетевого сбоя результат может быть
+// неизвестен, поэтому вызывающий код должен проверить состояние версии.
+func (c *Client) UploadIcon(ctx context.Context, packageName string, versionID int64, path string) error {
+	if packageName == "" || versionID <= 0 {
+		return exitcode.Errorf(exitcode.KindInvalidArguments,
+			"для загрузки иконки нужны package и положительный versionId")
+	}
+
+	stat, err := os.Stat(path)
+	if err != nil {
+		return exitcode.WithHint(
+			exitcode.Wrap(exitcode.KindInvalidMetadata, fmt.Errorf("прочитать %q: %w", path, err)),
+			"проверьте путь к иконке",
+		)
+	}
+	if stat.Size() == 0 {
+		return exitcode.Errorf(exitcode.KindInvalidMetadata, "файл %q пуст", path)
+	}
+	if stat.Size() > maxIconSize {
+		return exitcode.Errorf(exitcode.KindInvalidMetadata,
+			"файл %q больше допустимых 3 МБ", path)
+	}
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return exitcode.Wrap(exitcode.KindInvalidMetadata, err)
+	}
+
+	var body bytes.Buffer
+	form := multipart.NewWriter(&body)
+	filename := filepath.Base(path)
+	contentType := "application/octet-stream"
+	switch strings.ToLower(filepath.Ext(filename)) {
+	case ".png":
+		contentType = "image/png"
+	case ".jpg", ".jpeg":
+		contentType = "image/jpeg"
+	}
+	header := make(textproto.MIMEHeader)
+	header.Set("Content-Disposition", mime.FormatMediaType("form-data", map[string]string{
+		"name":     "file",
+		"filename": filename,
+	}))
+	header.Set("Content-Type", contentType)
+	part, err := form.CreatePart(header)
+	if err != nil {
+		return exitcode.Wrap(exitcode.KindInternal, err)
+	}
+	if _, err := part.Write(data); err != nil {
+		return exitcode.Wrap(exitcode.KindInternal, err)
+	}
+	if err := form.Close(); err != nil {
+		return exitcode.Wrap(exitcode.KindInternal, err)
+	}
+
+	token, err := c.RefreshToken(ctx)
+	if err != nil {
+		return err
+	}
+
+	url := fmt.Sprintf("%s/public/v1/application/%s/version/%d/image/icon",
+		c.cfg.BaseURL, url.PathEscape(packageName), versionID)
+	request, err := http.NewRequestWithContext(ctx, http.MethodPost, url, &body)
+	if err != nil {
+		return exitcode.Wrap(exitcode.KindInternal, err)
+	}
+	request.Header.Set("Content-Type", form.FormDataContentType())
+	request.Header.Set("Accept", "application/json")
+	request.Header.Set("Public-Token", token)
+	request.ContentLength = int64(body.Len())
+
+	c.cfg.Logger.DebugContext(ctx, "загрузка иконки",
+		"path", path, "size", stat.Size(), "version_id", versionID)
+
+	response, err := c.cfg.HTTPClient.Do(request)
+	if err != nil {
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+		return exitcode.WithHint(
+			exitcode.Wrap(exitcode.KindOutcomeUnknown,
+				fmt.Errorf("загрузка иконки прервана: %w", err)),
+			fmt.Sprintf("проверьте иконку версии %d в консоли RuStore", versionID),
+		)
+	}
+	defer func() { _ = response.Body.Close() }()
+
+	answer, err := io.ReadAll(io.LimitReader(response.Body, maxResponseBytes))
+	if err != nil {
+		return exitcode.WithHint(
+			exitcode.Wrap(exitcode.KindOutcomeUnknown,
+				fmt.Errorf("прочитать ответ загрузки иконки: %w", err)),
+			fmt.Sprintf("проверьте иконку версии %d в консоли RuStore", versionID),
+		)
+	}
+
+	if response.StatusCode >= http.StatusBadRequest {
+		return classifyAPIError(opUploadIcon, apiErrorFrom(response.StatusCode, answer))
+	}
+
+	var env envelope
+	if err := json.Unmarshal(answer, &env); err != nil {
+		return exitcode.WithHint(
+			exitcode.Wrap(exitcode.KindAPIResponseInvalid,
+				fmt.Errorf("разобрать ответ загрузки иконки: %w", err)),
+			"повторите команду; если ошибка повторяется, проверьте ответ API",
+		)
+	}
+	if env.Code != "OK" {
+		return classifyAPIError(opUploadIcon, &APIError{
+			Status:  response.StatusCode,
+			Code:    env.Code,
+			Message: messageOf(env.Message),
+		})
+	}
+	return nil
 }
 
 // writeFilePart копирует файл в multipart-часть.

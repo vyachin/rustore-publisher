@@ -1,6 +1,10 @@
 package app_test
 
 import (
+	"bytes"
+	"image"
+	"image/jpeg"
+	"image/png"
 	"os"
 	"path/filepath"
 	"slices"
@@ -25,6 +29,31 @@ func writeMetadata(t *testing.T, files map[string]string) string {
 		}
 	}
 	return root
+}
+
+func writeImage(t *testing.T, path string, width, height int, format string) {
+	t.Helper()
+
+	img := image.NewRGBA(image.Rect(0, 0, width, height))
+	var buf bytes.Buffer
+	var err error
+	switch format {
+	case "png":
+		err = png.Encode(&buf, img)
+	case "jpeg":
+		err = jpeg.Encode(&buf, img, nil)
+	default:
+		t.Fatalf("неизвестный формат %q", format)
+	}
+	if err != nil {
+		t.Fatalf("encode %s: %v", format, err)
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	if err := os.WriteFile(path, buf.Bytes(), 0o644); err != nil {
+		t.Fatalf("write %s: %v", path, err)
+	}
 }
 
 func TestReadMetadata(t *testing.T) {
@@ -85,17 +114,17 @@ func TestReadMetadataAcceptsPlayListing(t *testing.T) {
 	t.Parallel()
 
 	root := writeMetadata(t, map[string]string{
-		"README.md":                   "Как устроены метаданные",
-		"developer-contacts.json":     `{"email":"dev@example.com"}`,
-		"ru-RU/title.txt":             "Приложение",
-		"ru-RU/short_description.txt": "Короткое описание",
-		"ru-RU/full_description.txt":  "Полное описание",
-		"ru-RU/images/icon.png":       "картинка",
-		"ru-RU/changelogs/42.txt":     "Изменения версии 42",
-		"ru-RU/changelogs/41.txt":     "Изменения версии 41",
-		"ru-RU/changelogs/.DS_Store":  "служебный",
-		"ru-RU/changelogs/.gitkeep":   "",
-		".circleci/config.yml":        "служебный",
+		"README.md":                       "Как устроены метаданные",
+		"developer-contacts.json":         `{"email":"dev@example.com"}`,
+		"ru-RU/title.txt":                 "Приложение",
+		"ru-RU/short_description.txt":     "Короткое описание",
+		"ru-RU/full_description.txt":      "Полное описание",
+		"ru-RU/images/featureGraphic.png": "картинка",
+		"ru-RU/changelogs/42.txt":         "Изменения версии 42",
+		"ru-RU/changelogs/41.txt":         "Изменения версии 41",
+		"ru-RU/changelogs/.DS_Store":      "служебный",
+		"ru-RU/changelogs/.gitkeep":       "",
+		".circleci/config.yml":            "служебный",
 	})
 
 	report, err := app.ReadMetadata(root, 42)
@@ -116,7 +145,7 @@ func TestReadMetadataAcceptsPlayListing(t *testing.T) {
 	}
 	want := []string{
 		"README.md",
-		"ru-RU/images",
+		"ru-RU/images/featureGraphic.png",
 	}
 	if !slices.Equal(report.Ignored, want) {
 		t.Errorf("ignored = %v, want %v", report.Ignored, want)
@@ -449,5 +478,156 @@ func TestReadMetadataPartialListing(t *testing.T) {
 	if report.Listing.FullDescription == nil ||
 		*report.Listing.FullDescription != "Только полное описание" {
 		t.Errorf("fullDescription = %v", report.Listing.FullDescription)
+	}
+}
+
+func TestReadMetadataIcon(t *testing.T) {
+	t.Parallel()
+
+	root := writeMetadata(t, map[string]string{
+		"ru-RU/changelogs/42.txt":             "Изменения",
+		"ru-RU/images/featureGraphic.png":     "не иконка",
+		"ru-RU/images/phoneScreenshots/1.png": "скриншот",
+	})
+	writeImage(t, filepath.Join(root, "ru-RU", "images", "icon.png"), 512, 512, "png")
+
+	report, err := app.ReadMetadata(root, 42)
+	if err != nil {
+		t.Fatalf("ReadMetadata: %v", err)
+	}
+	if report.Icon == nil || filepath.Base(report.Icon.Path) != "icon.png" {
+		t.Errorf("icon = %+v", report.Icon)
+	}
+	want := []string{
+		"ru-RU/images/featureGraphic.png",
+		"ru-RU/images/phoneScreenshots",
+	}
+	if !slices.Equal(report.Ignored, want) {
+		t.Errorf("ignored = %v, want %v", report.Ignored, want)
+	}
+}
+
+func TestReadMetadataJPEGIcon(t *testing.T) {
+	t.Parallel()
+
+	root := writeMetadata(t, map[string]string{
+		"ru-RU/changelogs/42.txt": "Изменения",
+	})
+	writeImage(t, filepath.Join(root, "ru-RU", "images", "icon.jpg"), 512, 512, "jpeg")
+
+	report, err := app.ReadMetadata(root, 42)
+	if err != nil {
+		t.Fatalf("ReadMetadata: %v", err)
+	}
+	if report.Icon == nil || filepath.Base(report.Icon.Path) != "icon.jpg" {
+		t.Errorf("icon = %+v", report.Icon)
+	}
+}
+
+func TestReadMetadataIconErrors(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name  string
+		setup func(t *testing.T, root string)
+		want  string
+	}{
+		{
+			name: "пустой файл",
+			setup: func(t *testing.T, root string) {
+				writeMetadataFile(t, root, "ru-RU/images/icon.png", "")
+			},
+			want: "пуст",
+		},
+		{
+			name: "неверный размер",
+			setup: func(t *testing.T, root string) {
+				writeImage(t, filepath.Join(root, "ru-RU", "images", "icon.png"), 511, 512, "png")
+			},
+			want: "512",
+		},
+		{
+			name: "больше 3 МБ",
+			setup: func(t *testing.T, root string) {
+				writeMetadataFile(t, root, "ru-RU/images/icon.png", strings.Repeat("x", 3<<20+1))
+			},
+			want: "3 МБ",
+		},
+		{
+			name: "несколько иконок",
+			setup: func(t *testing.T, root string) {
+				writeImage(t, filepath.Join(root, "ru-RU", "images", "icon.png"), 512, 512, "png")
+				writeImage(t, filepath.Join(root, "ru-RU", "images", "icon.jpg"), 512, 512, "jpeg")
+			},
+			want: "несколько иконок",
+		},
+		{
+			name: "расширение не совпадает",
+			setup: func(t *testing.T, root string) {
+				path := filepath.Join(root, "ru-RU", "images", "icon.png")
+				writeImage(t, path, 512, 512, "png")
+				if err := os.Rename(path, filepath.Join(root, "ru-RU", "images", "icon.jpg")); err != nil {
+					t.Fatalf("rename: %v", err)
+				}
+			},
+			want: "PNG",
+		},
+		{
+			name: "images не каталог",
+			setup: func(t *testing.T, root string) {
+				writeMetadataFile(t, root, "ru-RU/images", "файл")
+			},
+			want: "не является каталогом",
+		},
+		{
+			name: "иконка — каталог",
+			setup: func(t *testing.T, root string) {
+				if err := os.MkdirAll(filepath.Join(root, "ru-RU", "images", "icon.png"), 0o755); err != nil {
+					t.Fatalf("mkdir: %v", err)
+				}
+			},
+			want: "не является файлом",
+		},
+		{
+			name: "не изображение",
+			setup: func(t *testing.T, root string) {
+				writeMetadataFile(t, root, "ru-RU/images/icon.png", "не картинка")
+			},
+			want: "PNG или JPEG",
+		},
+	}
+
+	for _, test := range tests {
+		test := test
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			root := writeMetadata(t, map[string]string{
+				"ru-RU/changelogs/42.txt": "Изменения",
+			})
+			test.setup(t, root)
+
+			_, err := app.ReadMetadata(root, 42)
+			if err == nil {
+				t.Fatal("ожидалась ошибка")
+			}
+			if kind := exitcode.KindOf(err); kind != exitcode.KindInvalidMetadata {
+				t.Errorf("KindOf = %q, want %q", kind, exitcode.KindInvalidMetadata)
+			}
+			if !strings.Contains(err.Error(), test.want) {
+				t.Errorf("err = %q, want %q", err, test.want)
+			}
+		})
+	}
+}
+
+func writeMetadataFile(t *testing.T, root, name, body string) {
+	t.Helper()
+	path := filepath.Join(root, name)
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
+		t.Fatalf("write %s: %v", name, err)
 	}
 }

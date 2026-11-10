@@ -1,8 +1,11 @@
 package cli_test
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
+	"image"
+	"image/png"
 	"io"
 	"net/http"
 	"os"
@@ -32,8 +35,12 @@ type publishStore struct {
 	shortDescription *string
 	fullDescription  *string
 	mismatchListing  bool
+	icon             []byte
+	iconUID          string
+	iconNotStored    bool
 
 	createCalls int
+	iconCalls   int
 	uploadCalls int
 	commitCalls int
 }
@@ -65,6 +72,8 @@ func (s *publishStore) handler(w http.ResponseWriter, r *http.Request) {
 	switch {
 	case r.URL.Path == "/public/auth/":
 		writeStoreJSON(w, http.StatusOK, `{"code":"OK","body":{"jwe":"token-1","ttl":900}}`)
+	case r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/image/icon"):
+		s.uploadIcon(w, r)
 	case r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/aab"):
 		s.upload(w, r)
 	case r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/commit"):
@@ -138,6 +147,28 @@ func (s *publishStore) create(w http.ResponseWriter, r *http.Request) {
 	writeStoreJSON(w, http.StatusOK, fmt.Sprintf(`{"code":"OK","body":%d}`, s.versionID))
 }
 
+func (s *publishStore) uploadIcon(w http.ResponseWriter, r *http.Request) {
+	s.iconCalls++
+	reader, err := r.MultipartReader()
+	if err != nil {
+		s.t.Fatalf("multipart: %v", err)
+	}
+	part, err := reader.NextPart()
+	if err != nil {
+		s.t.Fatalf("part: %v", err)
+	}
+	if part.FormName() != "file" {
+		s.t.Errorf("field = %q", part.FormName())
+	}
+	data, err := io.ReadAll(part)
+	if err != nil {
+		s.t.Fatalf("read icon: %v", err)
+	}
+	s.icon = data
+	s.iconUID = "icon-1"
+	writeStoreJSON(w, http.StatusOK, `{"code":"OK"}`)
+}
+
 func (s *publishStore) upload(w http.ResponseWriter, r *http.Request) {
 	s.uploadCalls++
 	reader, err := r.MultipartReader()
@@ -187,14 +218,21 @@ func (s *publishStore) detail(w http.ResponseWriter) {
 	if s.mismatchListing && s.appName != nil {
 		appName = `"Другое название"`
 	}
+	iconUID := "null"
+	iconURL := "null"
+	if s.iconUID != "" && !s.iconNotStored {
+		iconUID = fmt.Sprintf("%q", s.iconUID)
+		iconURL = fmt.Sprintf("%q", "https://example.com/icon.png")
+	}
 	writeStoreJSON(w, http.StatusOK, fmt.Sprintf(`{"code":"OK","body":{
 		"versionId":%d,"versionStatus":"%s","publishType":"%s",
 		"appName":%s,"shortDescription":%s,"fullDescription":%s,
+		"iconUid":%s,"iconUrl":%s,
 		"partialValue":-1,"whatsNew":%q,"statusComment":null,
 		"permissions":null,"packages":%s}}`,
 		s.versionID, s.status, publishType,
 		appName, optionalJSON(s.shortDescription), optionalJSON(s.fullDescription),
-		s.whatsNew, packages))
+		iconUID, iconURL, s.whatsNew, packages))
 }
 
 // optionalJSON кодирует необязательную строку для ответа подменного сервера.
@@ -240,6 +278,16 @@ func writeMetadataFile(t *testing.T, root, name, body string) {
 	if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
 		t.Fatalf("write %s: %v", name, err)
 	}
+}
+
+func writePNGIcon(t *testing.T, root string) {
+	t.Helper()
+
+	var buf bytes.Buffer
+	if err := png.Encode(&buf, image.NewRGBA(image.Rect(0, 0, 512, 512))); err != nil {
+		t.Fatalf("encode icon: %v", err)
+	}
+	writeMetadataFile(t, root, "ru-RU/images/icon.png", buf.String())
 }
 
 func TestPublishHappyPath(t *testing.T) {
@@ -300,10 +348,10 @@ func TestPublishAcceptsPlayMetadataLayout(t *testing.T) {
 	metadata, text := writeChangelog(t, 42, "Заметки о выпуске")
 
 	listing := map[string]string{
-		"README.md":                  "документация каталога",
-		"ru-RU/title.txt":            "Приложение",
-		"ru-RU/full_description.txt": "Подробное описание",
-		"ru-RU/images/icon.png":      "картинка",
+		"README.md":                       "документация каталога",
+		"ru-RU/title.txt":                 "Приложение",
+		"ru-RU/full_description.txt":      "Подробное описание",
+		"ru-RU/images/featureGraphic.png": "картинка",
 	}
 	for name, body := range listing {
 		path := filepath.Join(metadata, name)
@@ -521,6 +569,78 @@ func TestPublishSendsListingFromMetadata(t *testing.T) {
 	obj := decodeOne(t, stdout)
 	if obj["outcome"] != "submitted" {
 		t.Errorf("result = %v", obj)
+	}
+}
+
+func TestPublishSendsIconFromMetadata(t *testing.T) {
+	t.Parallel()
+
+	store := newPublishStore(t, 10)
+	metadata, _ := writeChangelog(t, 42, "Заметки")
+	writePNGIcon(t, metadata)
+	aab := writeAAB(t, "com.example.app", 42)
+
+	code, stdout, stderr := runAPI(t, store.handler, "--json", "publish",
+		"-f", aab, "--metadata-dir", metadata)
+	if code != 0 {
+		t.Fatalf("code = %d, stderr = %q", code, stderr)
+	}
+	if store.iconCalls != 1 || len(store.icon) == 0 {
+		t.Errorf("iconCalls = %d, bytes = %d", store.iconCalls, len(store.icon))
+	}
+	if store.uploadCalls != 1 {
+		t.Errorf("uploadCalls = %d", store.uploadCalls)
+	}
+	obj := decodeOne(t, stdout)
+	if obj["outcome"] != "submitted" {
+		t.Errorf("result = %v", obj)
+	}
+}
+
+func TestPublishIconNotStored(t *testing.T) {
+	t.Parallel()
+
+	store := newPublishStore(t, 10)
+	store.iconNotStored = true
+	metadata, _ := writeChangelog(t, 42, "Заметки")
+	writePNGIcon(t, metadata)
+	aab := writeAAB(t, "com.example.app", 42)
+
+	code, stdout, _ := runAPI(t, store.handler, "--json", "publish",
+		"-f", aab, "--metadata-dir", metadata)
+	if code != 5 {
+		t.Fatalf("code = %d, want 5", code)
+	}
+	obj := decodeOne(t, stdout)
+	errObj, _ := obj["error"].(map[string]any)
+	if errObj["code"] != "REMOTE_STATE_MISMATCH" {
+		t.Errorf("error = %v", obj["error"])
+	}
+	if store.iconCalls != 1 || store.uploadCalls != 0 {
+		t.Errorf("iconCalls = %d, uploadCalls = %d", store.iconCalls, store.uploadCalls)
+	}
+}
+
+func TestPublishInvalidIconStopsBeforeNetwork(t *testing.T) {
+	t.Parallel()
+
+	store := newPublishStore(t, 10)
+	metadata, _ := writeChangelog(t, 42, "Заметки")
+	writeMetadataFile(t, metadata, "ru-RU/images/icon.png", "не картинка")
+	aab := writeAAB(t, "com.example.app", 42)
+
+	code, stdout, _ := runAPI(t, store.handler, "--json", "publish",
+		"-f", aab, "--metadata-dir", metadata)
+	if code != 2 {
+		t.Fatalf("code = %d, want 2", code)
+	}
+	obj := decodeOne(t, stdout)
+	errObj, _ := obj["error"].(map[string]any)
+	if errObj["code"] != "INVALID_METADATA" {
+		t.Errorf("error = %v", obj["error"])
+	}
+	if store.createCalls != 0 || store.iconCalls != 0 || store.uploadCalls != 0 {
+		t.Errorf("сеть вызвана до проверки иконки")
 	}
 }
 

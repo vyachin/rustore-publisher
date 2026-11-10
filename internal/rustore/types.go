@@ -107,6 +107,8 @@ type VersionDetail struct {
 	AppName          *string
 	ShortDescription *string
 	FullDescription  *string
+	IconUID          *string
+	IconURL          *string
 	PublishType      string
 	PublishDateTime  *string
 	PartialValue     *int
@@ -164,6 +166,8 @@ type detailWire struct {
 	AppName          *string         `json:"appName"`
 	ShortDescription *string         `json:"shortDescription"`
 	FullDescription  *string         `json:"fullDescription"`
+	IconUID          *string         `json:"iconUid"`
+	IconURL          *string         `json:"iconUrl"`
 	PublishType      string          `json:"publishType"`
 	PublishDateTime  *string         `json:"publishDateTime"`
 	PartialValue     *int            `json:"partialValue"`
@@ -186,6 +190,8 @@ func (w detailWire) decode() VersionDetail {
 		AppName:          w.AppName,
 		ShortDescription: w.ShortDescription,
 		FullDescription:  w.FullDescription,
+		IconUID:          w.IconUID,
+		IconURL:          w.IconURL,
 		PublishType:      w.PublishType,
 		PublishDateTime:  w.PublishDateTime,
 		PartialValue:     w.PartialValue,
