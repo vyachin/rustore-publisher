@@ -128,7 +128,7 @@ rustore-publisher publish -f app-release.aab \
     aab: app/build/outputs/bundle/release/app-release.aab
     metadata-dir: metadata
     contacts-file: metadata/developer-contacts.json
-    credentials-json-base64: ${{ secrets.RUSTORE_CREDENTIALS_BASE64 }}
+    credentials-base64: ${{ secrets.RUSTORE_CREDENTIALS_BASE64 }}
 ```
 
 Без `contacts-file` действие использует

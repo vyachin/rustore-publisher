@@ -297,7 +297,7 @@ jobs:
           version: 0.0.3
           package: com.example.app
           aab: app/build/outputs/bundle/release/app-release.aab
-          credentials-json-base64: ${{ secrets.RUSTORE_CREDENTIALS_BASE64 }}
+          credentials-base64: ${{ secrets.RUSTORE_CREDENTIALS_BASE64 }}
           metadata-dir: metadata
           publish-type: manual
           if-exists: skip

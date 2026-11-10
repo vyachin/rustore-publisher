@@ -674,12 +674,13 @@ Linux amd64/arm64. Архивы CLI остаются кроссплатформ�
 для запуска действий можно добавить отдельно.
 
 Входные параметры публикации: `version`, `package`, `aab`, `credentials-file`,
-`credentials-json-base64`, `metadata-dir`, `contacts-file`, `version-code`, `publish-type` (manual),
+`credentials-base64`, `metadata-dir`, `contacts-file`, `version-code`, `publish-type` (manual),
 `if-exists` (fail), `dry-run` (false),
 `timeout` (30m), `request-timeout` (2m), `processing-timeout` (2m), `debug` (false). Параметры учётных данных взаимоисключающие.
-`credentials-json-base64` кодирует весь JSON учётных данных, в отличие от поля
-privateKey в Base64 внутри этого JSON. Алиас `credentials-base64` не добавлять:
-опубликованной совместимости ещё нет; использовать однозначное имя с первого выпуска.
+`credentials-base64` кодирует весь JSON учётных данных, в отличие от поля
+privateKey в Base64 внутри этого JSON. Имя совпадает с google-play-publisher;
+прежнее `credentials-json-base64` заменено без алиаса, чтобы входы двух действий
+назывались одинаково.
 
 Выходные параметры: `version-code`, `version-id`, `outcome`, `version-status`,
 `submitted`, `published`, `skipped`, `manual-action`, `error-code`,
@@ -719,7 +720,7 @@ jobs:
           version: 0.0.1
           package: com.example.app
           aab: app/build/outputs/bundle/release/app-release.aab
-          credentials-json-base64: ${{ secrets.RUSTORE_CREDENTIALS_BASE64 }}
+          credentials-base64: ${{ secrets.RUSTORE_CREDENTIALS_BASE64 }}
           metadata-dir: metadata
 ```
 

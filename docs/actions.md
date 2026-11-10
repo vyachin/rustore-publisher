@@ -51,7 +51,7 @@ jobs:
           version: 0.0.3
           package: com.example.app
           aab: app/build/outputs/bundle/release/app-release.aab
-          credentials-json-base64: ${{ secrets.RUSTORE_CREDENTIALS_BASE64 }}
+          credentials-base64: ${{ secrets.RUSTORE_CREDENTIALS_BASE64 }}
           metadata-dir: metadata
           # Контакты разработчика: metadata/developer-contacts.json
 ```
@@ -76,7 +76,7 @@ base64 -i rustore.json    # macOS, без переносов строк
 | `version` | тег действия | Версия CLI |
 | `package` | из AAB | Имя пакета для проверки |
 | `aab` | обязателен | Путь к подписанному AAB |
-| `credentials-json-base64` | — | Весь JSON учётных данных в Base64 |
+| `credentials-base64` | — | Весь JSON учётных данных в Base64 |
 | `credentials-file` | — | Путь к файлу учётных данных |
 | `metadata-dir` | — | Каталог `metadata` со списком изменений, текстами карточки, иконкой и контактами |
 | `contacts-file` | `metadata/developer-contacts.json` | Файл контактов разработчика, формат — [developer-contacts.md](developer-contacts.md) |

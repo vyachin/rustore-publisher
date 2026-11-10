@@ -11,9 +11,9 @@ inputs:
     description: Путь к подписанному AAB относительно GITHUB_WORKSPACE или абсолютный
     required: true
   credentials-file:
-    description: Путь к файлу учётных данных; взаимоисключающий с credentials-json-base64
+    description: Путь к файлу учётных данных; взаимоисключающий с credentials-base64
     required: false
-  credentials-json-base64:
+  credentials-base64:
     description: Весь JSON учётных данных в Base64; взаимоисключающий с credentials-file
     required: false
   metadata-dir:
@@ -115,7 +115,7 @@ runs:
         RUSTORE_PROCESSING_TIMEOUT: ${{ inputs['processing-timeout'] }}
         RUSTORE_DEBUG: ${{ inputs.debug }}
         RUSTORE_CREDENTIALS_FILE: ${{ inputs['credentials-file'] }}
-        RUSTORE_CREDENTIALS_BASE64: ${{ inputs['credentials-json-base64'] }}
+        RUSTORE_CREDENTIALS_BASE64: ${{ inputs['credentials-base64'] }}
       run: bash "$GITHUB_ACTION_PATH/scripts/publish.sh"
 
 branding:

@@ -180,7 +180,7 @@ if ! FAKE_CREDENTIALS_EXPECT='key-1' \
 	RUSTORE_AAB="${work}/app.aab" RUSTORE_CREDENTIALS_BASE64="$credentials_base64" \
 	GITHUB_OUTPUT="${work}/output" GITHUB_STEP_SUMMARY="${work}/summary" \
 	bash "$publish"; then
-	printf 'FAIL: credentials-json-base64 не обработан\n' >&2
+	printf 'FAIL: credentials-base64 не обработан\n' >&2
 	failures=$((failures + 1))
 fi
 

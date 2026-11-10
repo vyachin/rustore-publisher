@@ -88,7 +88,7 @@ fi
 base64_value="${RUSTORE_CREDENTIALS_BASE64:-}"
 credentials_file="${RUSTORE_CREDENTIALS_FILE:-}"
 if [ -n "$base64_value" ] && [ -n "$credentials_file" ]; then
-	die "credentials-json-base64 и credentials-file взаимоисключающие"
+	die "credentials-base64 и credentials-file взаимоисключающие"
 fi
 
 if [ -n "$base64_value" ]; then
@@ -96,9 +96,9 @@ if [ -n "$base64_value" ]; then
 	cred_path="${result_dir}/credentials-$$.json"
 	cred_created=1
 	if ! (umask 077; printf '%s' "$base64_value" | (base64 --decode 2>/dev/null || base64 -D) >"$cred_path"); then
-		die "не удалось декодировать credentials-json-base64"
+		die "не удалось декодировать credentials-base64"
 	fi
-	[ -s "$cred_path" ] || die "credentials-json-base64 пуст или содержит неверный Base64"
+	[ -s "$cred_path" ] || die "credentials-base64 пуст или содержит неверный Base64"
 elif [ -n "$credentials_file" ]; then
 	cred_path="$(resolve_path "$credentials_file")"
 	[ -f "$cred_path" ] || die "файл credentials-file ${credentials_file} не найден"
