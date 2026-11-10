@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.0.5] — 2026-11-10
+
 ### Добавлено
 
 - `publish` заменяет скриншоты из `ru-RU/images/phoneScreenshots`,

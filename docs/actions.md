@@ -8,7 +8,7 @@
 Скачайте архив нужной платформы из выпуска, сверьте `checksums.txt` и распакуйте:
 
 ```bash
-version=0.0.4
+version=0.0.5
 curl -sSfLO "https://github.com/vyachin/rustore-publisher/releases/download/v${version}/rustore-publisher_${version}_linux_amd64.tar.gz"
 curl -sSfLO "https://github.com/vyachin/rustore-publisher/releases/download/v${version}/checksums.txt"
 sha256sum --check --ignore-missing checksums.txt
@@ -21,9 +21,9 @@ tar -xzf "rustore-publisher_${version}_linux_amd64.tar.gz"
 ## Действие setup
 
 ```yaml
-- uses: vyachin/rustore-publisher/setup@v0.0.4
+- uses: vyachin/rustore-publisher/setup@v0.0.5
   with:
-    version: 0.0.4
+    version: 0.0.5
 - run: rustore-publisher status -p com.example.app --json
 ```
 
@@ -46,9 +46,9 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       # AAB собирается и подписывается здесь или скачивается из задания сборки.
-      - uses: vyachin/rustore-publisher@v0.0.4
+      - uses: vyachin/rustore-publisher@v0.0.5
         with:
-          version: 0.0.4
+          version: 0.0.5
           package: com.example.app
           aab: app/build/outputs/bundle/release/app-release.aab
           credentials-base64: ${{ secrets.RUSTORE_CREDENTIALS_BASE64 }}
