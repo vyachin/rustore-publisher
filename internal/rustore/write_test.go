@@ -39,9 +39,12 @@ func TestCreateDraft(t *testing.T) {
 					t.Errorf("запрос %s %s", r.Method, r.URL.Path)
 				}
 				var request struct {
-					PublishType  string  `json:"publishType"`
-					PartialValue int     `json:"partialValue"`
-					WhatsNew     *string `json:"whatsNew"`
+					AppName          *string `json:"appName"`
+					ShortDescription *string `json:"shortDescription"`
+					FullDescription  *string `json:"fullDescription"`
+					PublishType      string  `json:"publishType"`
+					PartialValue     int     `json:"partialValue"`
+					WhatsNew         *string `json:"whatsNew"`
 				}
 				if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
 					t.Fatalf("decode: %v", err)
@@ -52,15 +55,30 @@ func TestCreateDraft(t *testing.T) {
 				if request.WhatsNew == nil || *request.WhatsNew != "Изменения" {
 					t.Errorf("whatsNew = %v", request.WhatsNew)
 				}
+				if request.AppName == nil || *request.AppName != "Приложение" {
+					t.Errorf("appName = %v", request.AppName)
+				}
+				if request.ShortDescription == nil || *request.ShortDescription != "Коротко" {
+					t.Errorf("shortDescription = %v", request.ShortDescription)
+				}
+				if request.FullDescription == nil || *request.FullDescription != "Полное описание" {
+					t.Errorf("fullDescription = %v", request.FullDescription)
+				}
 				writeJSON(w, http.StatusOK, test.body)
 			}, new(int32))
 			t.Cleanup(server.Close)
 
 			whatsNew := "Изменения"
+			appName := "Приложение"
+			shortDescription := "Коротко"
+			fullDescription := "Полное описание"
 			id, err := client.CreateDraft(context.Background(), "com.example.app", rustore.CreateDraftRequest{
-				PublishType:  "MANUAL",
-				PartialValue: 100,
-				WhatsNew:     &whatsNew,
+				AppName:          &appName,
+				ShortDescription: &shortDescription,
+				FullDescription:  &fullDescription,
+				PublishType:      "MANUAL",
+				PartialValue:     100,
+				WhatsNew:         &whatsNew,
 			})
 			if err != nil {
 				t.Fatalf("CreateDraft: %v", err)

@@ -32,6 +32,7 @@ RuStore. Если нужен автоматический выпуск, укаж
 | Задача | Как решается |
 | --- | --- |
 | Отправить собранное обновление с компьютера | `publish` загружает AAB и отправляет версию на модерацию |
+| Обновить название и описания карточки | `publish --metadata-dir` читает `ru-RU/title.txt`, `short_description.txt` и `full_description.txt` |
 | Проверить доступ и сборку перед отправкой | `doctor` проверяет доступ, `publish --dry-run` — готовность к отправке без записи |
 | Узнать, что происходит с отправленной версией | `status` показывает состояние и комментарий модерации |
 | Добавить отправку в процесс выпуска | Действие GitHub Actions вызывает тот же CLI |
@@ -40,15 +41,14 @@ RuStore. Если нужен автоматический выпуск, укаж
 Проект рассчитан на **обновление уже опубликованного приложения**: в RuStore
 должна быть активная версия и заранее настроенная подпись AAB. Сборку и подпись
 выполняет ваш Android-проект. APK, первичная настройка приложения, загрузка
-иконок и скриншотов, изменение описания карточки и частичный охват
-не поддерживаются.
+иконок и скриншотов и частичный охват не поддерживаются.
 
 ## Быстрый старт
 
 ### 1. Установите CLI
 
 Скачайте архив для своей платформы из
-[выпуска v0.0.2](https://github.com/vyachin/rustore-publisher/releases/tag/v0.0.2),
+[выпуска v0.1.0](https://github.com/vyachin/rustore-publisher/releases/tag/v0.1.0),
 сверьте его с `checksums.txt`, распакуйте и добавьте каталог с бинарным файлом
 в `PATH`. Готовые сборки есть для Linux, macOS и Windows на amd64 и arm64;
 Go для их запуска не нужен. [Пример установки из архива](docs/actions.md#установка-cli).
@@ -62,7 +62,7 @@ go install github.com/vyachin/rustore-publisher/cmd/rustore-publisher@latest
 
 `@latest` ставит последний выпущенный тег. Чтобы закрепить версию, замените
 `@latest` на нужный тег, например
-`go install github.com/vyachin/rustore-publisher/cmd/rustore-publisher@v0.0.2`.
+`go install github.com/vyachin/rustore-publisher/cmd/rustore-publisher@v0.1.0`.
 
 Каталог установки Go (по умолчанию `$HOME/go/bin`) должен быть в `PATH`.
 Проверьте запуск:
@@ -128,27 +128,35 @@ rustore-publisher status -p com.example.app
 
 ### Отправить обновление со своим списком изменений
 
-Для AAB с `versionCode=42` подготовьте файл `metadata/ru-RU/changelogs/42.txt`:
+Для AAB с `versionCode=42` подготовьте каталог `metadata`:
 
 ```text
 metadata/
 └── ru-RU/
-    └── changelogs/
-        └── 42.txt
+    ├── changelogs/
+    │   └── 42.txt                 # обязательно
+    ├── title.txt                  # необязательно, до 50 символов
+    ├── short_description.txt      # необязательно, до 80 символов
+    └── full_description.txt       # необязательно, до 4000 символов
 ```
 
-Запишите в него текст для пользователей, например «Исправлена загрузка профиля».
-Файл должен быть непустым, в UTF-8, до 5000 символов. Имя файла соответствует
-Android `versionCode`, а не `versionName`.
+В `changelogs/42.txt` запишите текст для пользователей, например «Исправлена
+загрузка профиля». Файл должен быть непустым, в UTF-8, до 5000 символов.
+Имя файла соответствует Android `versionCode`, а не `versionName`.
+
+Название и описания необязательны. Если файла нет, поле не передаётся и
+наследуется из активной версии. Если файл есть, но пуст, содержит неверный
+UTF-8 или превышает лимит, публикация завершается кодом 2 до обращения к API:
+опечатка не должна приводить к случайной замене текста. `title.txt` и
+`short_description.txt` должны содержать одну строку; `full_description.txt`
+может быть многострочным. Переводы строк приводятся к LF, краевые пробелы
+удаляются. Тексты читаются только из `ru-RU`: другие локали, `images/` и
+служебные файлы перечисляются в предупреждении `METADATA_IGNORED`.
 
 ```bash
 rustore-publisher publish -f app-release.aab --metadata-dir metadata --dry-run
 rustore-publisher publish -f app-release.aab --metadata-dir metadata
 ```
-
-При переданном `--metadata-dir` файл для кода текущей сборки обязателен.
-Название, описания и `images/` из каталога другого магазина не загружаются:
-CLI перечисляет их в предупреждении `METADATA_IGNORED`.
 
 Чтобы обновить и контакты разработчика, добавьте
 `metadata/developer-contacts.json`:
@@ -162,7 +170,7 @@ CLI перечисляет их в предупреждении `METADATA_IGNORE
 
 Достаточно одного поля. Другой путь можно задать через `--contacts-file`,
 в том числе без `--metadata-dir`. [Полный формат и правила проверки контактов](docs/developer-contacts.md).
-Остальные поля карточки наследуются из активной версии.
+Поля карточки, которых нет в metadata, наследуются из активной версии.
 
 ### Одна папка metadata для Google Play и RuStore
 
@@ -177,10 +185,10 @@ metadata/
 ├── ru-RU/
 │   ├── changelogs/
 │   │   └── 42.txt              # Общий список изменений для обоих магазинов
-│   ├── title.txt               # Название для Google Play
-│   ├── short_description.txt   # Краткое описание для Google Play
-│   ├── full_description.txt    # Полное описание для Google Play
-│   └── images/                 # Изображения для Google Play
+│   ├── title.txt               # Название для Google Play и RuStore
+│   ├── short_description.txt   # Краткое описание для обоих магазинов
+│   ├── full_description.txt    # Полное описание для обоих магазинов
+│   └── images/                 # Изображения только для Google Play
 └── developer-contacts.json     # Контакты для RuStore, необязательно
 ```
 
@@ -204,8 +212,9 @@ rustore-publisher publish -f app-rustore-release.aab --metadata-dir metadata
 для каждого кода версии в тот же каталог `changelogs/`.
 
 Google Play использует локализованные тексты и изображения своей карточки.
-RuStore читает `ru-RU/changelogs/<versionCode>.txt` и необязательные контакты;
-остальные локали и файлы карточки пропускает с `METADATA_IGNORED`.
+RuStore читает `ru-RU/changelogs/<versionCode>.txt`, `ru-RU/title.txt`,
+`ru-RU/short_description.txt`, `ru-RU/full_description.txt` и необязательные
+контакты; изображения и другие локали пропускает с `METADATA_IGNORED`.
 Каждая команда выполняется отдельно: отправка в один магазин не запускает
 отправку в другой, а модерация и выпуск проходят по правилам каждого магазина.
 
@@ -272,9 +281,9 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       # Здесь соберите и подпишите AAB или скачайте готовую сборку.
-      - uses: vyachin/rustore-publisher@v0.0.2
+      - uses: vyachin/rustore-publisher@v0.1.0
         with:
-          version: 0.0.2
+          version: 0.1.0
           package: com.example.app
           aab: app/build/outputs/bundle/release/app-release.aab
           credentials-json-base64: ${{ secrets.RUSTORE_CREDENTIALS_BASE64 }}
@@ -296,7 +305,7 @@ base64 -i credentials.json | tr -d '\n'
 ```
 
 Действия работают на Linux amd64/arm64. Для установки CLI без публикации
-используйте `vyachin/rustore-publisher/setup@v0.0.2` с `version: 0.0.2`.
+используйте `vyachin/rustore-publisher/setup@v0.1.0` с `version: 0.1.0`.
 [Все входы, выходы и правила восстановления](docs/actions.md).
 
 ### Получить результат для скрипта или другого CI
@@ -337,7 +346,8 @@ rustore-publisher completion bash
 - [План и состояние работ](TODO.md).
 - [Архитектурные решения](docs/adr).
 
-В версии 0.0.2 чтения и отправка на модерацию проверены на живом приложении.
+В версии 0.1.0 чтения и отправка на модерацию проверены на живом приложении.
+Передача названия и описаний проверена на живом API созданием черновика.
 Публикация после одобрения модерации ещё не подтверждена.
 
 ## Разработка

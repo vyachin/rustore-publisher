@@ -31,9 +31,9 @@ func newPublishCmd(a *App, g *globalFlags) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "publish",
 		Short: "Загрузить AAB и отправить его на модерацию",
-		Long: "Проверить AAB и список изменений, создать черновик, загрузить файл " +
-			"и отправить версию на модерацию. Публикация после одобрения выполняется " +
-			"в консоли RuStore для ручного режима.",
+		Long: "Проверить AAB, список изменений и тексты карточки, создать черновик, " +
+			"загрузить файл и отправить версию на модерацию. Публикация после " +
+			"одобрения выполняется в консоли RuStore для ручного режима.",
 		Example: "  rustore-publisher publish -f app-release.aab --metadata-dir metadata\n" +
 			"  rustore-publisher publish -f app-release.aab --publish-type instantly",
 		Args: noArgs,
@@ -84,17 +84,19 @@ func newPublishCmd(a *App, g *globalFlags) *cobra.Command {
 			}
 
 			var changelog *string
+			var listing appcore.Listing
 			if metadataDir != "" {
-				read, err := appcore.ReadChangelog(metadataDir, bundle.Identity.VersionCode)
+				metadata, err := appcore.ReadMetadata(metadataDir, bundle.Identity.VersionCode)
 				if err != nil {
 					return failPublish(a, g, result, PhasePreflight, err, appcore.PublishReport{})
 				}
-				changelog = &read.Text
-				if len(read.Ignored) > 0 {
+				changelog = &metadata.Changelog
+				listing = metadata.Listing
+				if len(metadata.Ignored) > 0 {
 					result.Warnings = append(result.Warnings, Warning{
 						Code: appcore.WarningMetadataIgnored,
 						Message: fmt.Sprintf("в каталоге метаданных не публикуются: %s",
-							strings.Join(read.Ignored, ", ")),
+							strings.Join(metadata.Ignored, ", ")),
 					})
 				}
 			}
@@ -114,6 +116,7 @@ func newPublishCmd(a *App, g *globalFlags) *cobra.Command {
 				Package:           packageName,
 				Bundle:            bundle,
 				Changelog:         changelog,
+				Listing:           listing,
 				Contacts:          contacts,
 				PublishType:       publishTypeValue,
 				IfExists:          ifExists,
@@ -147,7 +150,8 @@ func newPublishCmd(a *App, g *globalFlags) *cobra.Command {
 	flags := cmd.Flags()
 	flags.StringVarP(&packageName, "package", "p", "", "имя пакета приложения; проверяется по AAB")
 	flags.StringVarP(&aabPath, "aab", "f", "", "путь к AAB (обязательно)")
-	flags.StringVar(&metadataDir, "metadata-dir", "", "каталог metadata со списком изменений")
+	flags.StringVar(&metadataDir, "metadata-dir", "",
+		"каталог metadata со списком изменений и текстами карточки")
 	flags.StringVar(&contactsFile, "contacts-file", "",
 		"файл контактов разработчика; по умолчанию metadata/"+appcore.ContactsFileName)
 	flags.Int64Var(&versionCode, "version-code", 0, "ожидаемый код версии; проверяется по AAB")

@@ -426,6 +426,9 @@ func TestVersionDetail(t *testing.T) {
 			"versionId":42,
 			"versionStatus":"DRAFT",
 			"statusComment":"нужны декларации",
+			"appName":"Приложение",
+			"shortDescription":"Коротко",
+			"fullDescription":"Полное описание",
 			"publishType":"MANUAL",
 			"partialValue":100,
 			"whatsNew":"Изменения",
@@ -446,6 +449,15 @@ func TestVersionDetail(t *testing.T) {
 	}
 	if detail.StatusComment == nil || *detail.StatusComment != "нужны декларации" {
 		t.Errorf("StatusComment = %v", detail.StatusComment)
+	}
+	if detail.AppName == nil || *detail.AppName != "Приложение" {
+		t.Errorf("AppName = %v", detail.AppName)
+	}
+	if detail.ShortDescription == nil || *detail.ShortDescription != "Коротко" {
+		t.Errorf("ShortDescription = %v", detail.ShortDescription)
+	}
+	if detail.FullDescription == nil || *detail.FullDescription != "Полное описание" {
+		t.Errorf("FullDescription = %v", detail.FullDescription)
 	}
 	if detail.Testing.Kind != rustore.TestingUnknown || detail.Testing.Raw == nil || *detail.Testing.Raw != "PRODUCTION" {
 		t.Errorf("Testing = %+v", detail.Testing)

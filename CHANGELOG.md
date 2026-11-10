@@ -2,10 +2,24 @@
 
 ## [Unreleased]
 
+## [0.1.0] — 2026-11-10
+
 ### Добавлено
 
+- `publish` читает из `--metadata-dir` необязательные `ru-RU/title.txt`,
+  `ru-RU/short_description.txt` и `ru-RU/full_description.txt` и передаёт
+  `appName`, `shortDescription` и `fullDescription` при создании черновика.
+  Отсутствие файла наследует поле из активной версии; пустой файл, неверный
+  UTF-8, лишняя строка или превышение лимита дают `INVALID_METADATA` (код 2)
+  до обращения к API.
 - Dependabot обновляет Go-модули и GitHub Actions раз в неделю; включены
   Dependabot alerts и security updates.
+
+### Изменено
+
+- `METADATA_IGNORED` больше не перечисляет название и описания: они
+  публикуются. Изображения, другие локали и служебные файлы по-прежнему
+  попадают в предупреждение.
 
 ## [0.0.2] — 2026-11-09
 

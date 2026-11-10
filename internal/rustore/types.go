@@ -101,16 +101,19 @@ type Package struct {
 
 // VersionDetail — подробности версии из метода v2.
 type VersionDetail struct {
-	VersionID       int64
-	Status          string
-	StatusComment   *string
-	PublishType     string
-	PublishDateTime *string
-	PartialValue    *int
-	WhatsNew        *string
-	Testing         TestingType
-	Permissions     json.RawMessage
-	Packages        []Package
+	VersionID        int64
+	Status           string
+	StatusComment    *string
+	AppName          *string
+	ShortDescription *string
+	FullDescription  *string
+	PublishType      string
+	PublishDateTime  *string
+	PartialValue     *int
+	WhatsNew         *string
+	Testing          TestingType
+	Permissions      json.RawMessage
+	Packages         []Package
 }
 
 // versionWire описывает ответ списка версий. Поле типа тестирования
@@ -155,16 +158,19 @@ func (w versionWire) decode() Version {
 
 // detailWire описывает ответ подробностей версии.
 type detailWire struct {
-	VersionID       int64           `json:"versionId"`
-	VersionStatus   string          `json:"versionStatus"`
-	StatusComment   *string         `json:"statusComment"`
-	PublishType     string          `json:"publishType"`
-	PublishDateTime *string         `json:"publishDateTime"`
-	PartialValue    *int            `json:"partialValue"`
-	WhatsNew        *string         `json:"whatsNew"`
-	TestingType     json.RawMessage `json:"testingType"`
-	Permissions     json.RawMessage `json:"permissions"`
-	Packages        []struct {
+	VersionID        int64           `json:"versionId"`
+	VersionStatus    string          `json:"versionStatus"`
+	StatusComment    *string         `json:"statusComment"`
+	AppName          *string         `json:"appName"`
+	ShortDescription *string         `json:"shortDescription"`
+	FullDescription  *string         `json:"fullDescription"`
+	PublishType      string          `json:"publishType"`
+	PublishDateTime  *string         `json:"publishDateTime"`
+	PartialValue     *int            `json:"partialValue"`
+	WhatsNew         *string         `json:"whatsNew"`
+	TestingType      json.RawMessage `json:"testingType"`
+	Permissions      json.RawMessage `json:"permissions"`
+	Packages         []struct {
 		VerCode          int64           `json:"verCode"`
 		IsMainApk        bool            `json:"isMainApk"`
 		ServicesType     string          `json:"servicesType"`
@@ -174,15 +180,18 @@ type detailWire struct {
 
 func (w detailWire) decode() VersionDetail {
 	detail := VersionDetail{
-		VersionID:       w.VersionID,
-		Status:          w.VersionStatus,
-		StatusComment:   w.StatusComment,
-		PublishType:     w.PublishType,
-		PublishDateTime: w.PublishDateTime,
-		PartialValue:    w.PartialValue,
-		WhatsNew:        w.WhatsNew,
-		Testing:         NormalizeTestingType(w.TestingType),
-		Permissions:     w.Permissions,
+		VersionID:        w.VersionID,
+		Status:           w.VersionStatus,
+		StatusComment:    w.StatusComment,
+		AppName:          w.AppName,
+		ShortDescription: w.ShortDescription,
+		FullDescription:  w.FullDescription,
+		PublishType:      w.PublishType,
+		PublishDateTime:  w.PublishDateTime,
+		PartialValue:     w.PartialValue,
+		WhatsNew:         w.WhatsNew,
+		Testing:          NormalizeTestingType(w.TestingType),
+		Permissions:      w.Permissions,
 	}
 	for _, pkg := range w.Packages {
 		detail.Packages = append(detail.Packages, Package{
@@ -224,6 +233,9 @@ type DeveloperContacts struct {
 // CreateDraftRequest — тело создания черновика. Остальные поля карточки
 // RuStore берёт из активной версии.
 type CreateDraftRequest struct {
+	AppName           *string            `json:"appName,omitempty"`
+	ShortDescription  *string            `json:"shortDescription,omitempty"`
+	FullDescription   *string            `json:"fullDescription,omitempty"`
 	PublishType       string             `json:"publishType"`
 	PartialValue      int                `json:"partialValue"`
 	WhatsNew          *string            `json:"whatsNew,omitempty"`

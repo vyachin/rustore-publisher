@@ -38,6 +38,7 @@
             "INVALID_CREDENTIALS",
             "INVALID_AAB",
             "INVALID_CHANGELOG",
+            "INVALID_METADATA",
             "AUTH_FAILED",
             "ACCESS_DENIED",
             "APPLICATION_NOT_FOUND",

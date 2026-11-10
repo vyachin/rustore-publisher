@@ -20,6 +20,7 @@ func TestKindCodes(t *testing.T) {
 		{exitcode.KindInvalidCredentials, exitcode.Usage},
 		{exitcode.KindInvalidAAB, exitcode.Usage},
 		{exitcode.KindInvalidChangelog, exitcode.Usage},
+		{exitcode.KindInvalidMetadata, exitcode.Usage},
 		{exitcode.KindAuthFailed, exitcode.Auth},
 		{exitcode.KindAccessDenied, exitcode.Auth},
 		{exitcode.KindApplicationNotFound, exitcode.NotFound},

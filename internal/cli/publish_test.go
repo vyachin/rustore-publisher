@@ -28,6 +28,11 @@ type publishStore struct {
 	contactsEmail string
 	mismatch      bool
 
+	appName          *string
+	shortDescription *string
+	fullDescription  *string
+	mismatchListing  bool
+
 	createCalls int
 	uploadCalls int
 	commitCalls int
@@ -79,6 +84,9 @@ func (s *publishStore) handler(w http.ResponseWriter, r *http.Request) {
 func (s *publishStore) create(w http.ResponseWriter, r *http.Request) {
 	s.createCalls++
 	var request struct {
+		AppName           *string `json:"appName"`
+		ShortDescription  *string `json:"shortDescription"`
+		FullDescription   *string `json:"fullDescription"`
 		PublishType       string  `json:"publishType"`
 		PartialValue      int     `json:"partialValue"`
 		WhatsNew          *string `json:"whatsNew"`
@@ -89,6 +97,9 @@ func (s *publishStore) create(w http.ResponseWriter, r *http.Request) {
 	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
 		s.t.Fatalf("create body: %v", err)
 	}
+	s.appName = request.AppName
+	s.shortDescription = request.ShortDescription
+	s.fullDescription = request.FullDescription
 	s.publishType = request.PublishType
 	s.partialValue = request.PartialValue
 	if request.WhatsNew != nil {
@@ -113,6 +124,15 @@ func (s *publishStore) create(w http.ResponseWriter, r *http.Request) {
 	}
 	if request.WhatsNew != nil {
 		s.created["whatsNew"] = *request.WhatsNew
+	}
+	if request.AppName != nil {
+		s.created["appName"] = *request.AppName
+	}
+	if request.ShortDescription != nil {
+		s.created["shortDescription"] = *request.ShortDescription
+	}
+	if request.FullDescription != nil {
+		s.created["fullDescription"] = *request.FullDescription
 	}
 	s.versions = append(s.versions, s.created)
 	writeStoreJSON(w, http.StatusOK, fmt.Sprintf(`{"code":"OK","body":%d}`, s.versionID))
@@ -163,11 +183,26 @@ func (s *publishStore) detail(w http.ResponseWriter) {
 	if s.uploaded {
 		packages = `[{"verCode":42,"isMainApk":true,"servicesType":"Unknown"}]`
 	}
+	appName := optionalJSON(s.appName)
+	if s.mismatchListing && s.appName != nil {
+		appName = `"Другое название"`
+	}
 	writeStoreJSON(w, http.StatusOK, fmt.Sprintf(`{"code":"OK","body":{
 		"versionId":%d,"versionStatus":"%s","publishType":"%s",
+		"appName":%s,"shortDescription":%s,"fullDescription":%s,
 		"partialValue":-1,"whatsNew":%q,"statusComment":null,
 		"permissions":null,"packages":%s}}`,
-		s.versionID, s.status, publishType, s.whatsNew, packages))
+		s.versionID, s.status, publishType,
+		appName, optionalJSON(s.shortDescription), optionalJSON(s.fullDescription),
+		s.whatsNew, packages))
+}
+
+// optionalJSON кодирует необязательную строку для ответа подменного сервера.
+func optionalJSON(value *string) string {
+	if value == nil {
+		return "null"
+	}
+	return fmt.Sprintf("%q", *value)
 }
 
 func (s *publishStore) list(w http.ResponseWriter) {
@@ -194,6 +229,17 @@ func writeChangelog(t *testing.T, versionCode int64, text string) (string, strin
 		t.Fatalf("write changelog: %v", err)
 	}
 	return root, text
+}
+
+func writeMetadataFile(t *testing.T, root, name, body string) {
+	t.Helper()
+	path := filepath.Join(root, name)
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
+		t.Fatalf("write %s: %v", name, err)
+	}
 }
 
 func TestPublishHappyPath(t *testing.T) {
@@ -240,6 +286,10 @@ func TestPublishHappyPath(t *testing.T) {
 	}
 	if store.whatsNew != text {
 		t.Errorf("whatsNew = %q", store.whatsNew)
+	}
+	if store.appName != nil || store.shortDescription != nil || store.fullDescription != nil {
+		t.Errorf("без файлов тексты не должны передаваться: %v/%v/%v",
+			store.appName, store.shortDescription, store.fullDescription)
 	}
 }
 
@@ -288,8 +338,11 @@ func TestPublishAcceptsPlayMetadataLayout(t *testing.T) {
 		}
 		found = true
 		message, _ := warning["message"].(string)
-		if !strings.Contains(message, "ru-RU/title.txt") {
+		if !strings.Contains(message, "ru-RU/images") {
 			t.Errorf("message = %q", message)
+		}
+		if strings.Contains(message, "title.txt") {
+			t.Errorf("title.txt попал в игнорируемые: %q", message)
 		}
 	}
 	if !found {
@@ -297,6 +350,15 @@ func TestPublishAcceptsPlayMetadataLayout(t *testing.T) {
 	}
 	if store.whatsNew != text {
 		t.Errorf("whatsNew = %q", store.whatsNew)
+	}
+	if store.appName == nil || *store.appName != "Приложение" {
+		t.Errorf("appName = %v", store.appName)
+	}
+	if store.fullDescription == nil || *store.fullDescription != "Подробное описание" {
+		t.Errorf("fullDescription = %v", store.fullDescription)
+	}
+	if store.shortDescription != nil {
+		t.Errorf("shortDescription = %v, want nil", store.shortDescription)
 	}
 }
 
@@ -428,6 +490,84 @@ func TestPublishInstantlyWithoutConfirmation(t *testing.T) {
 	}
 	if store.publishType != "INSTANTLY" {
 		t.Errorf("publishType = %q", store.publishType)
+	}
+}
+
+func TestPublishSendsListingFromMetadata(t *testing.T) {
+	t.Parallel()
+
+	store := newPublishStore(t, 10)
+	metadata, _ := writeChangelog(t, 42, "Заметки")
+	writeMetadataFile(t, metadata, "ru-RU/title.txt", "Приложение")
+	writeMetadataFile(t, metadata, "ru-RU/short_description.txt", "Короткое описание")
+	writeMetadataFile(t, metadata, "ru-RU/full_description.txt", "Полное описание\nВторая строка")
+	aab := writeAAB(t, "com.example.app", 42)
+
+	code, stdout, stderr := runAPI(t, store.handler, "--json", "publish",
+		"-f", aab, "--metadata-dir", metadata)
+	if code != 0 {
+		t.Fatalf("code = %d, stderr = %q", code, stderr)
+	}
+	if store.appName == nil || *store.appName != "Приложение" {
+		t.Errorf("appName = %v", store.appName)
+	}
+	if store.shortDescription == nil || *store.shortDescription != "Короткое описание" {
+		t.Errorf("shortDescription = %v", store.shortDescription)
+	}
+	if store.fullDescription == nil || *store.fullDescription != "Полное описание\nВторая строка" {
+		t.Errorf("fullDescription = %v", store.fullDescription)
+	}
+
+	obj := decodeOne(t, stdout)
+	if obj["outcome"] != "submitted" {
+		t.Errorf("result = %v", obj)
+	}
+}
+
+func TestPublishInvalidListingStopsBeforeNetwork(t *testing.T) {
+	t.Parallel()
+
+	store := newPublishStore(t, 10)
+	metadata, _ := writeChangelog(t, 42, "Заметки")
+	writeMetadataFile(t, metadata, "ru-RU/title.txt", strings.Repeat("я", 51))
+	aab := writeAAB(t, "com.example.app", 42)
+
+	code, stdout, _ := runAPI(t, store.handler, "--json", "publish",
+		"-f", aab, "--metadata-dir", metadata)
+	if code != 2 {
+		t.Fatalf("code = %d, want 2", code)
+	}
+	obj := decodeOne(t, stdout)
+	errObj, _ := obj["error"].(map[string]any)
+	if errObj["code"] != "INVALID_METADATA" {
+		t.Errorf("error = %v", obj["error"])
+	}
+	if store.createCalls != 0 || store.uploadCalls != 0 || store.commitCalls != 0 {
+		t.Errorf("сеть вызвана до проверки текстов")
+	}
+}
+
+func TestPublishListingMismatch(t *testing.T) {
+	t.Parallel()
+
+	store := newPublishStore(t, 10)
+	store.mismatchListing = true
+	metadata, _ := writeChangelog(t, 42, "Заметки")
+	writeMetadataFile(t, metadata, "ru-RU/title.txt", "Приложение")
+	aab := writeAAB(t, "com.example.app", 42)
+
+	code, stdout, _ := runAPI(t, store.handler, "--json", "publish",
+		"-f", aab, "--metadata-dir", metadata)
+	if code != 5 {
+		t.Fatalf("code = %d, want 5", code)
+	}
+	obj := decodeOne(t, stdout)
+	errObj, _ := obj["error"].(map[string]any)
+	if errObj["code"] != "REMOTE_STATE_MISMATCH" {
+		t.Errorf("error = %v", obj["error"])
+	}
+	if store.uploadCalls != 0 {
+		t.Errorf("загрузка началась при несовпадении текстов")
 	}
 }
 

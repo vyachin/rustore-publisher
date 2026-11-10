@@ -1,0 +1,453 @@
+package app_test
+
+import (
+	"os"
+	"path/filepath"
+	"slices"
+	"strings"
+	"testing"
+
+	"github.com/vyachin/rustore-publisher/internal/app"
+	"github.com/vyachin/rustore-publisher/internal/exitcode"
+)
+
+func writeMetadata(t *testing.T, files map[string]string) string {
+	t.Helper()
+
+	root := t.TempDir()
+	for name, body := range files {
+		path := filepath.Join(root, name)
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatalf("mkdir: %v", err)
+		}
+		if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
+			t.Fatalf("write %s: %v", name, err)
+		}
+	}
+	return root
+}
+
+func TestReadMetadata(t *testing.T) {
+	t.Parallel()
+
+	root := writeMetadata(t, map[string]string{
+		"ru-RU/changelogs/42.txt": "Исправлены ошибки.\nУскорен запуск.\n",
+	})
+
+	report, err := app.ReadMetadata(root, 42)
+	if err != nil {
+		t.Fatalf("ReadMetadata: %v", err)
+	}
+	if report.Changelog != "Исправлены ошибки.\nУскорен запуск.\n" {
+		t.Errorf("text = %q", report.Changelog)
+	}
+	if len(report.Ignored) != 0 {
+		t.Errorf("ignored = %v, want пусто", report.Ignored)
+	}
+}
+
+func TestReadMetadataNormalizesNewlines(t *testing.T) {
+	t.Parallel()
+
+	root := writeMetadata(t, map[string]string{
+		"ru-RU/changelogs/7.txt": "Первая строка\r\nВторая строка\rТретья",
+	})
+
+	report, err := app.ReadMetadata(root, 7)
+	if err != nil {
+		t.Fatalf("ReadMetadata: %v", err)
+	}
+	if report.Changelog != "Первая строка\nВторая строка\nТретья" {
+		t.Errorf("text = %q", report.Changelog)
+	}
+}
+
+func TestReadMetadataIgnoresDotFiles(t *testing.T) {
+	t.Parallel()
+
+	root := writeMetadata(t, map[string]string{
+		".DS_Store":               "служебный",
+		"ru-RU/.DS_Store":         "служебный",
+		"ru-RU/changelogs/.keep":  "",
+		"ru-RU/changelogs/42.txt": "Изменения",
+	})
+
+	report, err := app.ReadMetadata(root, 42)
+	if err != nil {
+		t.Fatalf("ReadMetadata: %v", err)
+	}
+	if len(report.Ignored) != 0 {
+		t.Errorf("ignored = %v, want пусто", report.Ignored)
+	}
+}
+
+func TestReadMetadataAcceptsPlayListing(t *testing.T) {
+	t.Parallel()
+
+	root := writeMetadata(t, map[string]string{
+		"README.md":                   "Как устроены метаданные",
+		"developer-contacts.json":     `{"email":"dev@example.com"}`,
+		"ru-RU/title.txt":             "Приложение",
+		"ru-RU/short_description.txt": "Короткое описание",
+		"ru-RU/full_description.txt":  "Полное описание",
+		"ru-RU/images/icon.png":       "картинка",
+		"ru-RU/changelogs/42.txt":     "Изменения версии 42",
+		"ru-RU/changelogs/41.txt":     "Изменения версии 41",
+		"ru-RU/changelogs/.DS_Store":  "служебный",
+		"ru-RU/changelogs/.gitkeep":   "",
+		".circleci/config.yml":        "служебный",
+	})
+
+	report, err := app.ReadMetadata(root, 42)
+	if err != nil {
+		t.Fatalf("ReadMetadata: %v", err)
+	}
+	if report.Changelog != "Изменения версии 42" {
+		t.Errorf("text = %q", report.Changelog)
+	}
+	if report.Listing.AppName == nil || *report.Listing.AppName != "Приложение" {
+		t.Errorf("appName = %v", report.Listing.AppName)
+	}
+	if report.Listing.ShortDescription == nil || *report.Listing.ShortDescription != "Короткое описание" {
+		t.Errorf("shortDescription = %v", report.Listing.ShortDescription)
+	}
+	if report.Listing.FullDescription == nil || *report.Listing.FullDescription != "Полное описание" {
+		t.Errorf("fullDescription = %v", report.Listing.FullDescription)
+	}
+	want := []string{
+		"README.md",
+		"ru-RU/images",
+	}
+	if !slices.Equal(report.Ignored, want) {
+		t.Errorf("ignored = %v, want %v", report.Ignored, want)
+	}
+}
+
+func TestReadMetadataAcceptsFiveThousandRunes(t *testing.T) {
+	t.Parallel()
+
+	text := strings.Repeat("я", 5000)
+	root := writeMetadata(t, map[string]string{"ru-RU/changelogs/42.txt": text})
+
+	report, err := app.ReadMetadata(root, 42)
+	if err != nil {
+		t.Fatalf("ReadMetadata: %v", err)
+	}
+	if len([]rune(report.Changelog)) != 5000 {
+		t.Errorf("длина = %d", len([]rune(report.Changelog)))
+	}
+}
+
+func TestReadMetadataErrors(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name     string
+		metadata map[string]string
+		code     int64
+		want     string
+		kind     exitcode.Kind
+	}{
+		{
+			name:     "нет файла версии",
+			metadata: map[string]string{"ru-RU/changelogs/41.txt": "старое"},
+			code:     42,
+			want:     "нет списка изменений",
+			kind:     exitcode.KindInvalidChangelog,
+		},
+		{
+			name:     "пустой файл",
+			metadata: map[string]string{"ru-RU/changelogs/42.txt": ""},
+			code:     42,
+			want:     "пуст",
+			kind:     exitcode.KindInvalidChangelog,
+		},
+		{
+			name:     "только пробелы",
+			metadata: map[string]string{"ru-RU/changelogs/42.txt": "  \n\t"},
+			code:     42,
+			want:     "пуст",
+			kind:     exitcode.KindInvalidChangelog,
+		},
+		{
+			name:     "нет локали ru-RU",
+			metadata: map[string]string{"en-US/changelogs/42.txt": "changes"},
+			code:     42,
+			want:     "ru-RU",
+			kind:     exitcode.KindInvalidChangelog,
+		},
+		{
+			name: "посторонний файл в changelogs",
+			metadata: map[string]string{
+				"ru-RU/changelogs/42.txt":      "изменения",
+				"ru-RU/changelogs/testers.txt": "тестировщики",
+			},
+			code: 42,
+			want: "посторонний элемент",
+			kind: exitcode.KindInvalidChangelog,
+		},
+		{
+			name:     "слишком длинный",
+			metadata: map[string]string{"ru-RU/changelogs/42.txt": strings.Repeat("я", 5001)},
+			code:     42,
+			want:     "5000",
+			kind:     exitcode.KindInvalidChangelog,
+		},
+		{
+			name:     "не UTF-8",
+			metadata: map[string]string{"ru-RU/changelogs/42.txt": "\xff\xfe"},
+			code:     42,
+			want:     "UTF-8",
+			kind:     exitcode.KindInvalidChangelog,
+		},
+		{
+			name:     "неположительный код",
+			metadata: map[string]string{"ru-RU/changelogs/42.txt": "изменения"},
+			code:     0,
+			want:     "положительным",
+			kind:     exitcode.KindInvalidArguments,
+		},
+	}
+
+	for _, test := range tests {
+		test := test
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			root := writeMetadata(t, test.metadata)
+			_, err := app.ReadMetadata(root, test.code)
+			if err == nil {
+				t.Fatal("ожидалась ошибка")
+			}
+			if kind := exitcode.KindOf(err); kind != test.kind {
+				t.Errorf("KindOf = %q, want %q", kind, test.kind)
+			}
+			if !strings.Contains(err.Error(), test.want) {
+				t.Errorf("err = %q, want %q", err, test.want)
+			}
+		})
+	}
+}
+
+func TestReadMetadataMissingDirectory(t *testing.T) {
+	t.Parallel()
+
+	_, err := app.ReadMetadata(filepath.Join(t.TempDir(), "missing"), 42)
+	if err == nil {
+		t.Fatal("ожидалась ошибка")
+	}
+	if kind := exitcode.KindOf(err); kind != exitcode.KindInvalidChangelog {
+		t.Errorf("KindOf = %q", kind)
+	}
+}
+
+func TestReadMetadataAllowsContactsFile(t *testing.T) {
+	t.Parallel()
+
+	root := writeMetadata(t, map[string]string{
+		"developer-contacts.json": `{"email":"dev@example.com"}`,
+		"ru-RU/changelogs/42.txt": "Изменения",
+	})
+
+	report, err := app.ReadMetadata(root, 42)
+	if err != nil {
+		t.Fatalf("ReadMetadata: %v", err)
+	}
+	if report.Changelog != "Изменения" {
+		t.Errorf("text = %q", report.Changelog)
+	}
+	if len(report.Ignored) != 0 {
+		t.Errorf("ignored = %v, want пусто", report.Ignored)
+	}
+}
+
+func TestReadMetadataIgnoresUnknownMetadataFile(t *testing.T) {
+	t.Parallel()
+
+	root := writeMetadata(t, map[string]string{
+		"notes.txt":               "посторонний",
+		"ru-RU/changelogs/42.txt": "Изменения",
+	})
+
+	report, err := app.ReadMetadata(root, 42)
+	if err != nil {
+		t.Fatalf("ReadMetadata: %v", err)
+	}
+	if !slices.Equal(report.Ignored, []string{"notes.txt"}) {
+		t.Errorf("ignored = %v, want [notes.txt]", report.Ignored)
+	}
+}
+
+func TestReadMetadataWithoutListingInherits(t *testing.T) {
+	t.Parallel()
+
+	root := writeMetadata(t, map[string]string{
+		"ru-RU/changelogs/42.txt": "Изменения",
+	})
+
+	report, err := app.ReadMetadata(root, 42)
+	if err != nil {
+		t.Fatalf("ReadMetadata: %v", err)
+	}
+	if report.Listing.AppName != nil || report.Listing.ShortDescription != nil ||
+		report.Listing.FullDescription != nil {
+		t.Errorf("listing = %+v, want пустые поля", report.Listing)
+	}
+	if len(report.Ignored) != 0 {
+		t.Errorf("ignored = %v, want пусто", report.Ignored)
+	}
+}
+
+func TestReadMetadataListingNormalizes(t *testing.T) {
+	t.Parallel()
+
+	root := writeMetadata(t, map[string]string{
+		"ru-RU/changelogs/42.txt":     "Изменения",
+		"ru-RU/title.txt":             "\uFEFF  Приложение \r\n",
+		"ru-RU/short_description.txt": "Короткое описание\r\n",
+		"ru-RU/full_description.txt":  "Первая строка\r\nВторая строка\n",
+	})
+
+	report, err := app.ReadMetadata(root, 42)
+	if err != nil {
+		t.Fatalf("ReadMetadata: %v", err)
+	}
+	if report.Listing.AppName == nil || *report.Listing.AppName != "Приложение" {
+		t.Errorf("appName = %v", report.Listing.AppName)
+	}
+	if report.Listing.ShortDescription == nil || *report.Listing.ShortDescription != "Короткое описание" {
+		t.Errorf("shortDescription = %v", report.Listing.ShortDescription)
+	}
+	if report.Listing.FullDescription == nil ||
+		*report.Listing.FullDescription != "Первая строка\nВторая строка" {
+		t.Errorf("fullDescription = %v", report.Listing.FullDescription)
+	}
+}
+
+func TestReadMetadataListingLimits(t *testing.T) {
+	t.Parallel()
+
+	root := writeMetadata(t, map[string]string{
+		"ru-RU/changelogs/42.txt":     "Изменения",
+		"ru-RU/title.txt":             strings.Repeat("я", 50),
+		"ru-RU/short_description.txt": strings.Repeat("я", 80),
+		"ru-RU/full_description.txt":  strings.Repeat("я", 4000),
+	})
+
+	report, err := app.ReadMetadata(root, 42)
+	if err != nil {
+		t.Fatalf("ReadMetadata: %v", err)
+	}
+	if report.Listing.AppName == nil || len([]rune(*report.Listing.AppName)) != 50 {
+		t.Errorf("appName = %v", report.Listing.AppName)
+	}
+	if report.Listing.ShortDescription == nil || len([]rune(*report.Listing.ShortDescription)) != 80 {
+		t.Errorf("shortDescription = %v", report.Listing.ShortDescription)
+	}
+	if report.Listing.FullDescription == nil || len([]rune(*report.Listing.FullDescription)) != 4000 {
+		t.Errorf("fullDescription = %v", report.Listing.FullDescription)
+	}
+}
+
+func TestReadMetadataListingErrors(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		file string
+		body string
+		want string
+	}{
+		{name: "пустой title", file: "ru-RU/title.txt", body: "", want: "пуст"},
+		{name: "пробельный short", file: "ru-RU/short_description.txt", body: "  \n\t", want: "пуст"},
+		{name: "длинный title", file: "ru-RU/title.txt", body: strings.Repeat("я", 51), want: "50"},
+		{name: "длинный short", file: "ru-RU/short_description.txt", body: strings.Repeat("я", 81), want: "80"},
+		{name: "длинный full", file: "ru-RU/full_description.txt", body: strings.Repeat("я", 4001), want: "4000"},
+		{name: "не UTF-8", file: "ru-RU/title.txt", body: "\xff\xfe", want: "UTF-8"},
+		{name: "title в две строки", file: "ru-RU/title.txt", body: "Первая\nВторая", want: "одну строку"},
+		{name: "short в две строки", file: "ru-RU/short_description.txt", body: "Первая\nВторая", want: "одну строку"},
+	}
+
+	for _, test := range tests {
+		test := test
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			root := writeMetadata(t, map[string]string{
+				"ru-RU/changelogs/42.txt": "Изменения",
+				test.file:                 test.body,
+			})
+			_, err := app.ReadMetadata(root, 42)
+			if err == nil {
+				t.Fatal("ожидалась ошибка")
+			}
+			if kind := exitcode.KindOf(err); kind != exitcode.KindInvalidMetadata {
+				t.Errorf("KindOf = %q, want %q", kind, exitcode.KindInvalidMetadata)
+			}
+			if !strings.Contains(err.Error(), test.want) {
+				t.Errorf("err = %q, want %q", err, test.want)
+			}
+		})
+	}
+}
+
+func TestReadMetadataListingDirectory(t *testing.T) {
+	t.Parallel()
+
+	root := writeMetadata(t, map[string]string{
+		"ru-RU/changelogs/42.txt": "Изменения",
+	})
+	if err := os.Mkdir(filepath.Join(root, "ru-RU", "title.txt"), 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+
+	_, err := app.ReadMetadata(root, 42)
+	if err == nil {
+		t.Fatal("ожидалась ошибка")
+	}
+	if kind := exitcode.KindOf(err); kind != exitcode.KindInvalidMetadata {
+		t.Errorf("KindOf = %q", kind)
+	}
+}
+
+func TestReadMetadataIgnoresOtherLocaleListing(t *testing.T) {
+	t.Parallel()
+
+	root := writeMetadata(t, map[string]string{
+		"en-US/title.txt":            "Application",
+		"en-US/full_description.txt": "Description",
+		"ru-RU/changelogs/42.txt":    "Изменения",
+	})
+
+	report, err := app.ReadMetadata(root, 42)
+	if err != nil {
+		t.Fatalf("ReadMetadata: %v", err)
+	}
+	if report.Listing.AppName != nil || report.Listing.FullDescription != nil {
+		t.Errorf("listing = %+v, want пустые поля", report.Listing)
+	}
+	if !slices.Equal(report.Ignored, []string{"en-US"}) {
+		t.Errorf("ignored = %v, want [en-US]", report.Ignored)
+	}
+}
+
+func TestReadMetadataPartialListing(t *testing.T) {
+	t.Parallel()
+
+	root := writeMetadata(t, map[string]string{
+		"ru-RU/changelogs/42.txt":    "Изменения",
+		"ru-RU/full_description.txt": "Только полное описание",
+	})
+
+	report, err := app.ReadMetadata(root, 42)
+	if err != nil {
+		t.Fatalf("ReadMetadata: %v", err)
+	}
+	if report.Listing.AppName != nil || report.Listing.ShortDescription != nil {
+		t.Errorf("listing = %+v, want только fullDescription", report.Listing)
+	}
+	if report.Listing.FullDescription == nil ||
+		*report.Listing.FullDescription != "Только полное описание" {
+		t.Errorf("fullDescription = %v", report.Listing.FullDescription)
+	}
+}

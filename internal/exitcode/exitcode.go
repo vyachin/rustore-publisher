@@ -36,6 +36,7 @@ const (
 	KindInvalidCredentials          Kind = "INVALID_CREDENTIALS"
 	KindInvalidAAB                  Kind = "INVALID_AAB"
 	KindInvalidChangelog            Kind = "INVALID_CHANGELOG"
+	KindInvalidMetadata             Kind = "INVALID_METADATA"
 	KindAuthFailed                  Kind = "AUTH_FAILED"
 	KindAccessDenied                Kind = "ACCESS_DENIED"
 	KindApplicationNotFound         Kind = "APPLICATION_NOT_FOUND"
@@ -65,6 +66,7 @@ var kindCodes = map[Kind]Code{
 	KindInvalidCredentials:          Usage,
 	KindInvalidAAB:                  Usage,
 	KindInvalidChangelog:            Usage,
+	KindInvalidMetadata:             Usage,
 	KindAuthFailed:                  Auth,
 	KindAccessDenied:                Auth,
 	KindApplicationNotFound:         NotFound,

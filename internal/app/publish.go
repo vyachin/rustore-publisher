@@ -32,6 +32,7 @@ type PublishInput struct {
 	Package           string
 	Bundle            *artifact.Bundle
 	Changelog         *string
+	Listing           Listing
 	Contacts          *rustore.DeveloperContacts
 	PublishType       string
 	IfExists          string
@@ -152,6 +153,9 @@ func Publish(ctx context.Context, client *rustore.Client, in PublishInput, progr
 		progress.Phase = PhaseCreate
 	}
 	versionID, err := client.CreateDraft(ctx, in.Package, rustore.CreateDraftRequest{
+		AppName:           in.Listing.AppName,
+		ShortDescription:  in.Listing.ShortDescription,
+		FullDescription:   in.Listing.FullDescription,
 		PublishType:       in.PublishType,
 		PartialValue:      100,
 		WhatsNew:          in.Changelog,
@@ -180,7 +184,7 @@ func Publish(ctx context.Context, client *rustore.Client, in PublishInput, progr
 	if err != nil {
 		return report, err
 	}
-	if err := verifyDraft(created, &detail, in.PublishType, in.Changelog); err != nil {
+	if err := verifyDraft(created, &detail, in.PublishType, in.Changelog, in.Listing); err != nil {
 		return report, err
 	}
 	report.Detail = &detail
@@ -378,9 +382,9 @@ func decideExisting(version *rustore.Version, ifExists string) error {
 	}
 }
 
-// verifyDraft сверяет сохранённые настройки созданного черновика.
+// verifyDraft сверяет сохранённые настройки и тексты созданного черновика.
 func verifyDraft(version *rustore.Version, detail *rustore.VersionDetail,
-	publishType string, whatsNew *string,
+	publishType string, whatsNew *string, listing Listing,
 ) error {
 	var differences []string
 	if !strings.EqualFold(version.PublishType, publishType) {
@@ -401,6 +405,7 @@ func verifyDraft(version *rustore.Version, detail *rustore.VersionDetail,
 			differences = append(differences, "whatsNew не совпадает с переданным")
 		}
 	}
+	differences = append(differences, listingDifferences(detail, listing)...)
 	if version.Status != rustore.StatusDraft || detail.Status != rustore.StatusDraft {
 		differences = append(differences,
 			fmt.Sprintf("versionStatus: ожидался DRAFT, получены %q и %q", version.Status, detail.Status))
@@ -413,6 +418,26 @@ func verifyDraft(version *rustore.Version, detail *rustore.VersionDetail,
 			"сервер сохранил черновик %d иначе: %s", version.VersionID, strings.Join(differences, "; ")),
 		"не исправляйте настройки автоматически; проверьте черновик в консоли RuStore",
 	)
+}
+
+// listingDifferences сверяет переданные тексты карточки с ответом API.
+func listingDifferences(detail *rustore.VersionDetail, listing Listing) []string {
+	var differences []string
+	if listing.AppName != nil && !sameText(detail.AppName, listing.AppName) {
+		differences = append(differences, "appName не совпадает с переданным")
+	}
+	if listing.ShortDescription != nil && !sameText(detail.ShortDescription, listing.ShortDescription) {
+		differences = append(differences, "shortDescription не совпадает с переданным")
+	}
+	if listing.FullDescription != nil && !sameText(detail.FullDescription, listing.FullDescription) {
+		differences = append(differences, "fullDescription не совпадает с переданным")
+	}
+	return differences
+}
+
+// sameText сравнивает сохранённое значение с отправленным.
+func sameText(stored *string, expected *string) bool {
+	return stored != nil && expected != nil && *stored == *expected
 }
 
 // matchedReleases выбирает релизные версии с заданным кодом.
